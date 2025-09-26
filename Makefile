@@ -159,7 +159,7 @@ migration-create: ## Create new migration (requires NAME variable)
 setup-admin: ## Setup basic admin accounts for testing
 	@echo "👤 Setting up admin accounts..."
 	@if docker ps | grep -q agent-backend-prod; then \
-		docker exec agent-backend-prod npm run seed; \
+		docker exec agent-backend-prod npm run seed:prod; \
 	elif docker ps | grep -q agent-backend-dev; then \
 		docker exec agent-backend-dev npm run seed; \
 	else \
@@ -177,7 +177,7 @@ setup-admin: ## Setup basic admin accounts for testing
 setup-planettalk: ## Setup PlanetTalk diaspora community data
 	@echo "🌍 Setting up PlanetTalk diaspora community..."
 	@if docker ps | grep -q agent-backend-prod; then \
-		docker exec agent-backend-prod npm run seed:planettalk; \
+		docker exec agent-backend-prod npm run seed:planettalk:prod; \
 	elif docker ps | grep -q agent-backend-dev; then \
 		docker exec agent-backend-dev npm run seed:planettalk; \
 	else \

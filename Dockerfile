@@ -43,6 +43,9 @@ COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 # Copy email templates if they exist
 COPY --from=builder --chown=nestjs:nodejs /app/src/templates ./src/templates
 
+# Copy scripts for seeding (production needs these)
+COPY --from=builder --chown=nestjs:nodejs /app/scripts ./scripts
+
 # Switch to non-root user
 USER nestjs
 
