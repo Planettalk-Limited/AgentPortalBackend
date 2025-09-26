@@ -118,7 +118,7 @@ docker-push: ## Push Docker image to registry
 migration-run: ## Run database migrations
 	@echo "🗄️  Running database migrations..."
 	@if docker ps | grep -q agent-backend-prod; then \
-		docker exec agent-backend-prod npm run migration:run; \
+		docker exec agent-backend-prod npm run migration:run:prod; \
 	elif docker ps | grep -q agent-backend-dev; then \
 		docker exec agent-backend-dev npm run migration:run; \
 	else \
