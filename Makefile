@@ -74,6 +74,9 @@ prod-up: ## Start production environment
 		echo "Please create .env.prod with production environment variables."; \
 		exit 1; \
 	fi
+	@echo "🔨 Building production image..."
+	docker-compose --env-file .env.prod --profile prod build
+	@echo "🚀 Starting containers..."
 	docker-compose --env-file .env.prod --profile prod up -d
 	@echo "✅ Production environment started!"
 	@echo "🌐 API available at: https://api.planettalk.com"
