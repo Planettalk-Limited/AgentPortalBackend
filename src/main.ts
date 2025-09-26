@@ -24,10 +24,26 @@ async function bootstrap() {
   const apiPrefix = configService.get<string>('API_PREFIX');
   app.setGlobalPrefix(apiPrefix);
 
-  // CORS
+  // CORS configuration
+  const allowedOrigins = [
+    'https://portal.planettalk.com',
+    'https://www.portal.planettalk.com',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:5173',  // Vite dev server
+    'http://localhost:4200',  // Angular dev server
+  ];
+
+  // In development, allow all origins for easier testing
+  const corsOrigin = configService.get<string>('NODE_ENV') === 'development' 
+    ? true 
+    : allowedOrigins;
+
   app.enableCors({
-    origin: true,
+    origin: corsOrigin,
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   });
 
   // Swagger documentation
