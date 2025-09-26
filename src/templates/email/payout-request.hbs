@@ -1,0 +1,149 @@
+<style>
+        h1 {
+            color: #00bcd4;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        .payout-details {
+            background-color: #f8fafc;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .detail-row:last-child {
+            border-bottom: none;
+        }
+        .detail-label {
+            font-weight: bold;
+            color: #374151;
+        }
+        .detail-value {
+            color: #1f2937;
+        }
+        .amount {
+            font-size: 28px;
+            font-weight: bold;
+            color: #059669;
+            text-align: center;
+        }
+        .status-badge {
+            display: inline-block;
+            background-color: #fbbf24;
+            color: #92400e;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+        .info-box {
+            background-color: #dbeafe;
+            border-left: 4px solid #3b82f6;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .timeline {
+            margin: 20px 0;
+        }
+        .timeline-item {
+            margin-bottom: 15px;
+            padding-left: 20px;
+            position: relative;
+        }
+        .timeline-item::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: #00bcd4;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        .button {
+            display: inline-block;
+            background-color: #00bcd4;
+            color: white;
+            padding: 12px 30px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .support {
+            background-color: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+    </style>
+
+<h1>Payout Request Received</h1>
+        
+        <p>Hi {{firstName}},</p>
+        
+        <p>We've received your payout request and it's now under review by our finance team.</p>
+
+        <div class="payout-details">
+            <div class="amount">${{amount}}</div>
+            <div style="text-align: center; margin: 10px 0;">
+                <span class="status-badge">Under Review</span>
+            </div>
+            
+            <div class="detail-row">
+                <span class="detail-label">Payout ID:</span>
+                <span class="detail-value">{{payoutId}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Agent Code:</span>
+                <span class="detail-value">{{agentCode}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">{{paymentMethod}}</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Request Date:</span>
+                <span class="detail-value">{{requestDate}}</span>
+            </div>
+            {{#if description}}
+            <div class="detail-row">
+                <span class="detail-label">Description:</span>
+                <span class="detail-value">{{description}}</span>
+            </div>
+            {{/if}}
+        </div>
+
+        <div class="info-box">
+            <strong>What happens next?</strong><br>
+            Our finance team will review your payout request within 2-3 business days. You'll receive an email notification once your payout has been approved and processed.
+        </div>
+
+        <div class="timeline">
+            <h3>Review Process:</h3>
+            <div class="timeline-item">✅ <strong>Request Received</strong> - Your payout request has been submitted</div>
+            <div class="timeline-item">⏳ <strong>Under Review</strong> - Finance team is verifying your request</div>
+            <div class="timeline-item">⏸️ <strong>Pending</strong> - Approval decision and processing</div>
+            <div class="timeline-item">💸 <strong>Payment</strong> - Funds transferred to your account</div>
+        </div>
+
+        <a href="{{agentPortalUrl}}/payouts" class="button">View Payout Status</a>
+
+        <div class="support">
+            <strong>Need Help?</strong><br>
+            If you have any questions about your payout request, our support team is here to help:
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li>📧 Email: <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></li>
+                <li>📱 Phone: {{supportPhone}}</li>
+                <li>💬 Live Chat: Available in your agent dashboard</li>
+            </ul>
+        </div>

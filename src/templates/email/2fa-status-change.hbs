@@ -1,0 +1,65 @@
+<div style="background-color: #d4edda; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #28a745;">
+  
+  <p style="color: #155724; margin-bottom: 15px;">Hello {{firstName}},</p>
+
+  {{#if enabled}}
+    <div style="background-color: #d1ecf1; padding: 15px; border-radius: 6px; margin: 15px 0;">
+      <p style="margin: 0; color: #0c5460; font-weight: bold;">
+        ✅ Two-factor authentication has been successfully enabled on your account.
+      </p>
+    </div>
+
+    <p style="color: #155724; margin-bottom: 15px;">Your account is now more secure! Future logins will require:</p>
+    <ul style="color: #155724; margin-bottom: 20px;">
+      <li><strong>Your password</strong></li>
+      <li><strong>6-digit code from your authenticator app</strong></li>
+    </ul>
+
+    {{#if backupCodesGenerated}}
+      <div style="background-color: #fff3cd; padding: 15px; border-radius: 6px; margin: 15px 0; border-left: 3px solid #ffc107;">
+        <p style="margin: 0; color: #856404; font-weight: bold;">
+          💾 Important: Save your backup codes in a secure location. You'll need them if you lose access to your authenticator app.
+        </p>
+      </div>
+    {{/if}}
+  {{else}}
+    <div style="background-color: #f8d7da; padding: 15px; border-radius: 6px; margin: 15px 0;">
+      <p style="margin: 0; color: #721c24; font-weight: bold;">
+        ⚠️ Two-factor authentication has been disabled on your account.
+      </p>
+    </div>
+
+    <p style="color: #155724; margin-bottom: 15px;">Your account security has been reduced. Consider re-enabling 2FA for better protection.</p>
+  {{/if}}
+
+  <div style="background-color: #e9ecef; padding: 15px; border-radius: 6px; margin: 20px 0;">
+    <p style="margin: 0; font-size: 14px; color: #6c757d;">
+      <strong>Security Details:</strong><br>
+      • <strong>Changed at:</strong> {{timestamp}}<br>
+      • <strong>IP Address:</strong> {{ipAddress}}<br>
+      • <strong>Device:</strong> {{deviceInfo}}
+    </p>
+  </div>
+
+  {{#if enabled}}
+    <div style="text-align: center; margin: 25px 0;">
+      <a href="{{dashboardUrl}}/security" style="display: inline-block; background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        🔒 View Security Settings
+      </a>
+    </div>
+  {{else}}
+    <div style="text-align: center; margin: 25px 0;">
+      <a href="{{dashboardUrl}}/security" style="display: inline-block; background-color: #ffc107; color: #212529; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        🔐 Re-enable 2FA
+      </a>
+    </div>
+  {{/if}}
+</div>
+
+<div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+  <p style="margin: 0; font-size: 14px; color: #6c757d;">
+    <strong>Didn't make this change?</strong> If you didn't {{action}} two-factor authentication, please contact our security team immediately at 
+    <a href="mailto:security@agentportal.com" style="color: #dc3545; text-decoration: none;">security@agentportal.com</a>
+  </p>
+</div>
+

@@ -1,0 +1,22 @@
+<div style="background-color: #d1ecf1; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #17a2b8;">
+  
+  <div style="color: #0c5460; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+    {{{message}}}
+  </div>
+  
+  {{#if actionUrl}}
+    <div style="text-align: center; margin: 25px 0;">
+      <a href="{{actionUrl}}" style="display: inline-block; background-color: #17a2b8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        {{#if actionText}}{{actionText}}{{else}}View Earnings{{/if}}
+      </a>
+    </div>
+  {{/if}}
+</div>
+
+<div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+  <p style="margin: 0; font-size: 14px; color: #6c757d;">
+    <strong>Earnings Dashboard:</strong> View your complete earnings history and request payouts in your 
+    <a href="{{dashboardUrl}}/earnings" style="color: #17a2b8; text-decoration: none;">earnings dashboard</a>.
+  </p>
+</div>
+

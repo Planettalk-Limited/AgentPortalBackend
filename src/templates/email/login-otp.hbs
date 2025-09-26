@@ -1,0 +1,40 @@
+<div style="background-color: #d1ecf1; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #17a2b8;">
+  <p style="color: #0c5460; margin-bottom: 15px;">Hello {{firstName}},</p>
+
+  <p style="color: #0c5460; margin-bottom: 20px;">Here is your login verification code for Agent Portal:</p>
+
+  <div style="text-align: center; margin: 30px 0;">
+    <div style="display: inline-block; background-color: #007bff; color: white; padding: 20px 30px; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 8px; font-family: 'Courier New', monospace;">
+      {{otp}}
+    </div>
+  </div>
+
+  <div style="background-color: #fff3cd; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 3px solid #ffc107;">
+    <p style="margin: 0; color: #856404; font-weight: bold;">
+      ⏰ This code will expire in {{expiryMinutes}} minutes for security.
+    </p>
+  </div>
+
+  <p style="color: #0c5460; margin-bottom: 15px;">Enter this 6-digit code on the login page to complete your sign-in.</p>
+
+  <div style="background-color: #f8d7da; padding: 15px; border-radius: 6px; margin: 20px 0; border-left: 3px solid #dc3545;">
+    <p style="margin: 0; color: #721c24; font-weight: bold;">
+      🚨 Security Notice: If you didn't try to log in, please change your password immediately and contact support.
+    </p>
+  </div>
+
+  <div style="text-align: center; margin: 25px 0;">
+    <a href="{{dashboardUrl}}" style="display: inline-block; background-color: #17a2b8; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+      🔐 Return to Login
+    </a>
+  </div>
+</div>
+
+<div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+  <p style="margin: 0; font-size: 14px; color: #6c757d;">
+    <strong>Login Details:</strong><br>
+    • <strong>Time:</strong> {{loginTime}}<br>
+    • <strong>Code expires:</strong> {{expiryMinutes}} minutes from now
+  </p>
+</div>
+

@@ -1,0 +1,27 @@
+<div class="footer">
+    <p><strong>PlanetTalk</strong> - Connecting Families Worldwide</p>
+    <p>This is an automated message. Please do not reply to this email.</p>
+    
+    {{#if showSupport}}
+    <p>Need help? Contact our support team at <a href="mailto:support@planettalk.com">support@planettalk.com</a></p>
+    {{/if}}
+    
+    {{#if showSocial}}
+    <div class="social-links">
+        <a href="https://facebook.com/planettalk" title="Facebook">Facebook</a> |
+        <a href="https://twitter.com/planettalk" title="Twitter">Twitter</a> |
+        <a href="https://linkedin.com/company/planettalk" title="LinkedIn">LinkedIn</a>
+    </div>
+    {{/if}}
+    
+    <p style="margin-top: 20px; font-size: 12px; color: #6c757d;">
+        © {{currentYear}} PlanetTalk. Connecting families worldwide.<br>
+        Help the diaspora connect and support their families back home without breaking the bank!
+    </p>
+    
+    {{#if unsubscribeLink}}
+    <p style="font-size: 12px; color: #6c757d;">
+        <a href="{{unsubscribeLink}}" style="color: #6c757d;">Unsubscribe from these emails</a>
+    </p>
+    {{/if}}
+</div>

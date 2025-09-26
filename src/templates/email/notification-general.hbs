@@ -1,0 +1,35 @@
+<div style="background-color: #f8f9fa; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #007bff;">
+  
+  {{#if priority}}
+    {{#eq priority "urgent"}}
+      <div style="background-color: #dc3545; color: white; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-weight: bold;">
+        🚨 URGENT NOTIFICATION
+      </div>
+    {{/eq}}
+    {{#eq priority "high"}}
+      <div style="background-color: #fd7e14; color: white; padding: 8px 12px; border-radius: 4px; margin-bottom: 15px; font-weight: bold;">
+        ⚠️ HIGH PRIORITY
+      </div>
+    {{/eq}}
+  {{/if}}
+  
+  <div style="color: #495057; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+    {{{message}}}
+  </div>
+  
+  {{#if actionUrl}}
+    <div style="text-align: center; margin: 25px 0;">
+      <a href="{{actionUrl}}" style="display: inline-block; background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        {{#if actionText}}{{actionText}}{{else}}View Details{{/if}}
+      </a>
+    </div>
+  {{/if}}
+</div>
+
+<div style="background-color: #e9ecef; padding: 15px; border-radius: 6px; margin: 20px 0;">
+  <p style="margin: 0; font-size: 14px; color: #6c757d;">
+    <strong>Need Help?</strong> Contact our support team or visit your 
+    <a href="{{dashboardUrl}}" style="color: #007bff; text-decoration: none;">dashboard</a> for more information.
+  </p>
+</div>
+

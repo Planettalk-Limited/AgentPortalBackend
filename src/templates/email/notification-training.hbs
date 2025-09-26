@@ -1,0 +1,22 @@
+<div style="background-color: #d4edda; padding: 20px; margin: 20px 0; border-radius: 8px; border-left: 4px solid #28a745;">
+  
+  <div style="color: #155724; font-size: 16px; line-height: 1.6; margin-bottom: 20px;">
+    {{{message}}}
+  </div>
+  
+  {{#if actionUrl}}
+    <div style="text-align: center; margin: 25px 0;">
+      <a href="{{actionUrl}}" style="display: inline-block; background-color: #28a745; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px;">
+        {{#if actionText}}{{actionText}}{{else}}Start Training{{/if}}
+      </a>
+    </div>
+  {{/if}}
+</div>
+
+<div style="background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin: 20px 0;">
+  <p style="margin: 0; font-size: 14px; color: #6c757d;">
+    <strong>Training Portal:</strong> Access all your training materials and track your progress in your 
+    <a href="{{dashboardUrl}}/training" style="color: #28a745; text-decoration: none;">training dashboard</a>.
+  </p>
+</div>
+

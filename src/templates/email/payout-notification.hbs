@@ -1,0 +1,82 @@
+<h2>Payout Status Update</h2>
+
+<p>Hello {{agentName}},</p>
+
+<p>We have an update regarding your payout request.</p>
+
+<div class="credentials-box">
+    <h3>Payout Details</h3>
+    <div class="credential-item">
+        <strong>Payout ID:</strong> {{payoutId}}
+    </div>
+    <div class="credential-item">
+        <strong>Amount:</strong> ${{amount}}
+    </div>
+    <div class="credential-item">
+        <strong>Status:</strong> {{status}}
+    </div>
+    <div class="credential-item">
+        <strong>Requested:</strong> {{requestedDate}}
+    </div>
+    {{#if processedDate}}
+    <div class="credential-item">
+        <strong>Processed:</strong> {{processedDate}}
+    </div>
+    {{/if}}
+</div>
+
+{{#if (eq status 'approved')}}
+<div class="info-box success">
+    <strong>Great News!</strong> Your payout request has been approved and is being processed. You should receive your funds within {{processingTime}}.
+</div>
+{{/if}}
+
+{{#if (eq status 'completed')}}
+<div class="info-box success">
+    <strong>Payout Completed!</strong> Your payout of ${{amount}} has been successfully processed.
+    {{#if transactionId}}
+    <br><strong>Transaction ID:</strong> {{transactionId}}
+    {{/if}}
+</div>
+{{/if}}
+
+{{#if (eq status 'rejected')}}
+<div class="info-box danger">
+    <strong>Payout Rejected</strong>
+    {{#if rejectionReason}}
+    <br><strong>Reason:</strong> {{rejectionReason}}
+    {{/if}}
+</div>
+<p>If you have questions about this decision, please contact our support team.</p>
+{{/if}}
+
+{{#if fees}}
+<div class="info-box">
+    <strong>Processing Details:</strong><br>
+    Gross Amount: ${{amount}}<br>
+    Processing Fee: ${{fees}}<br>
+    <strong>Net Amount: ${{netAmount}}</strong>
+</div>
+{{/if}}
+
+{{#if (eq status 'completed')}}
+<h3>Payment Method: {{paymentMethod}}</h3>
+{{#if paymentDetails}}
+<p>Funds have been sent to your registered {{paymentMethod}} account.</p>
+{{/if}}
+{{/if}}
+
+<a href="{{dashboardUrl}}" class="button">View Dashboard</a>
+
+{{#if adminNotes}}
+<div class="info-box">
+    <strong>Admin Notes:</strong><br>
+    {{adminNotes}}
+</div>
+{{/if}}
+
+<p>You can view all your payout history and current balance in your agent dashboard.</p>
+
+<p>Thank you for being part of the PlanetTalk community and helping families stay connected!</p>
+
+<p>Best regards,<br><strong>The PlanetTalk Finance Team</strong></p>
