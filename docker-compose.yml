@@ -44,11 +44,11 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.agent.rule=Host(`api.planettalk.com`)"
-      - "traefik.http.routers.agent.entrypoints=websecure"
-      - "traefik.http.routers.agent.tls.certresolver=letsencrypt"
-      - "traefik.http.services.agent.loadbalancer.server.port=3001"
-      - "traefik.http.routers.agent.middlewares=global-sec-headers@file,global-compress@file"
+      - "traefik.http.routers.agent-backend.rule=Host(`api.planettalk.com`)"
+      - "traefik.http.routers.agent-backend.entrypoints=websecure"
+      - "traefik.http.routers.agent-backend.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agent-backend.loadbalancer.server.port=3001"
+      - "traefik.http.routers.agent-backend.middlewares=global-sec-headers@file,global-compress@file"
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/v1/health"]
       interval: 30s
