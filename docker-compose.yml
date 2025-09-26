@@ -35,6 +35,7 @@ services:
       - MAILGUN_FROM_EMAIL=${MAILGUN_FROM_EMAIL}
       - MAILGUN_FROM_NAME=${MAILGUN_FROM_NAME}
       - MAILGUN_API_URL=${MAILGUN_API_URL}
+      - FRONTEND_URL=https://portal.planettalk.com
     expose:
       - "3001"
     ports:
