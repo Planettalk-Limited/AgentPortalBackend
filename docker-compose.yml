@@ -20,7 +20,7 @@ services:
       - agent-network
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=3001
       - API_PREFIX=api/v1
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -36,7 +36,7 @@ services:
       - MAILGUN_FROM_NAME=${MAILGUN_FROM_NAME}
       - MAILGUN_API_URL=${MAILGUN_API_URL}
     expose:
-      - "3000"
+      - "3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -47,10 +47,10 @@ services:
       - "traefik.http.routers.agent.rule=Host(`api.planettalk.com`)"
       - "traefik.http.routers.agent.entrypoints=websecure"
       - "traefik.http.routers.agent.tls.certresolver=letsencrypt"
-      - "traefik.http.services.agent.loadbalancer.server.port=3000"
+      - "traefik.http.services.agent.loadbalancer.server.port=3001"
       - "traefik.http.routers.agent.middlewares=global-sec-headers@file,global-compress@file"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -69,7 +69,7 @@ services:
       - agent-network
     environment:
       - NODE_ENV=development
-      - PORT=3000
+      - PORT=3001
       - API_PREFIX=api/v1
       - DB_HOST=postgres
       - DB_PORT=5432
@@ -91,7 +91,7 @@ services:
     volumes:
       - /app/node_modules
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001/api/v1/health"]
       interval: 30s
       timeout: 10s
       retries: 3
