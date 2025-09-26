@@ -28,8 +28,26 @@ help: ## Show this help message
 	@echo "  docker-push     - Push Docker image to registry"
 	@echo ""
 	@echo "Database Commands:"
-	@echo "  migration-run   - Run database migrations"
-	@echo "  migration-create - Create new migration"
+	@echo "  migration-run     - Run database migrations"
+	@echo "  migration-create  - Create new migration"
+	@echo ""
+	@echo "Admin Setup Commands:"
+	@echo "  setup-admin       - Setup basic admin accounts for testing"
+	@echo "  setup-planettalk  - Setup PlanetTalk diaspora community data"
+	@echo "  setup-complete    - Complete setup (migrations + admin accounts)"
+	@echo ""
+	@echo "Container Access Commands:"
+	@echo "  prod-shell      - Open shell in production backend container"
+	@echo "  dev-shell       - Open shell in development backend container"
+	@echo "  db-shell        - Open PostgreSQL shell"
+	@echo "  redis-shell     - Open Redis CLI"
+	@echo ""
+	@echo "Container Status Commands:"
+	@echo "  ps              - Show running containers"
+	@echo "  ps-all          - Show all containers (running and stopped)"
+	@echo "  top             - Show container resource usage"
+	@echo "  status          - Show container status"
+	@echo "  health-check    - Check service health"
 	@echo ""
 	@echo "Utility Commands:"
 	@echo "  setup-traefik   - Setup Traefik network for production"
@@ -137,6 +155,48 @@ migration-create: ## Create new migration (requires NAME variable)
 	npm run migration:create src/migrations/$(shell date +%s)-$(NAME)
 	@echo "✅ Migration created!"
 
+# Admin Setup Commands
+setup-admin: ## Setup basic admin accounts for testing
+	@echo "👤 Setting up admin accounts..."
+	@if docker ps | grep -q agent-backend-prod; then \
+		docker exec agent-backend-prod npm run seed; \
+	elif docker ps | grep -q agent-backend-dev; then \
+		docker exec agent-backend-dev npm run seed; \
+	else \
+		echo "❌ No running backend container found. Start the environment first."; \
+		exit 1; \
+	fi
+	@echo "✅ Admin accounts created!"
+	@echo ""
+	@echo "🔑 Login Credentials:"
+	@echo "   System Admin: admin@agentportal.com / admin123"
+	@echo "   PT Admin: sarah.johnson@agentportal.com / ptadmin123"
+	@echo "   Agent 1: john.doe@example.com / agent123"
+	@echo "   Agent 2: jane.smith@example.com / agent123"
+
+setup-planettalk: ## Setup PlanetTalk diaspora community data
+	@echo "🌍 Setting up PlanetTalk diaspora community..."
+	@if docker ps | grep -q agent-backend-prod; then \
+		docker exec agent-backend-prod npm run seed:planettalk; \
+	elif docker ps | grep -q agent-backend-dev; then \
+		docker exec agent-backend-dev npm run seed:planettalk; \
+	else \
+		echo "❌ No running backend container found. Start the environment first."; \
+		exit 1; \
+	fi
+	@echo "✅ PlanetTalk community data created!"
+	@echo ""
+	@echo "🔑 Login Credentials:"
+	@echo "   Admin: admin@planettalk.com / admin123"
+	@echo "   PT Admin: maria.santos@planettalk.com / ptadmin123"
+	@echo "   Diaspora Agents: kwame.asante@example.com / agent123"
+	@echo "   More agents available - check container logs for full list"
+
+setup-complete: migration-run setup-admin ## Complete setup: migrations + admin accounts
+	@echo "🎉 Complete setup finished!"
+	@echo "🔗 API Docs: http://localhost:3000/api/v1/docs"
+	@echo "🚀 Ready to test!"
+
 # Utility Commands
 setup-traefik: ## Setup Traefik network for production
 	@echo "🔧 Setting up Traefik network..."
@@ -180,7 +240,14 @@ health-check: ## Check health of running services
 		docker exec agent-portal-redis redis-cli ping && echo "✅ Healthy" || echo "❌ Unhealthy"; \
 	fi
 
-# Development specific commands
+# Container Access Commands
+prod-shell: ## Open shell in production backend container
+	@if docker ps | grep -q agent-backend-prod; then \
+		docker exec -it agent-backend-prod sh; \
+	else \
+		echo "❌ Production backend container not running. Start with 'make prod-up'"; \
+	fi
+
 dev-shell: ## Open shell in development backend container
 	@if docker ps | grep -q agent-backend-dev; then \
 		docker exec -it agent-backend-dev sh; \
@@ -188,14 +255,36 @@ dev-shell: ## Open shell in development backend container
 		echo "❌ Development backend container not running. Start with 'make dev-up'"; \
 	fi
 
-dev-db-shell: ## Open PostgreSQL shell in development environment
+db-shell: ## Open PostgreSQL shell (works for both dev/prod)
 	@if docker ps | grep -q agent-portal-postgres; then \
 		docker exec -it agent-portal-postgres psql -U postgres -d agent_portal; \
 	else \
 		echo "❌ Database container not running. Start with 'make dev-up' or 'make prod-up'"; \
 	fi
 
-# Show running containers
+redis-shell: ## Open Redis CLI (works for both dev/prod)
+	@if docker ps | grep -q agent-portal-redis; then \
+		docker exec -it agent-portal-redis redis-cli; \
+	else \
+		echo "❌ Redis container not running. Start with 'make dev-up' or 'make prod-up'"; \
+	fi
+
+# Container Status Commands
+ps: ## Show all running containers (same as status)
+	@echo "📊 Container Status:"
+	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}" | grep -E "(NAMES|agent-portal-|agent-backend)" || echo "No Agent Portal containers running"
+
 status: ## Show status of all containers
 	@echo "📊 Container Status:"
 	@docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -E "(agent-portal-|agent-backend)" || echo "No containers running"
+
+ps-all: ## Show all containers (running and stopped)
+	@echo "📊 All Containers (Running and Stopped):"
+	@docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}" | grep -E "(NAMES|agent-portal-|agent-backend)" || echo "No Agent Portal containers found"
+
+top: ## Show resource usage of running containers
+	@echo "📈 Container Resource Usage:"
+	@docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.PIDs}}" | grep -E "(NAME|agent-)"
+
+# Legacy commands for compatibility
+dev-db-shell: db-shell ## Alias for db-shell (deprecated, use db-shell)
