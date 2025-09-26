@@ -9,10 +9,10 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --only=production && npm cache clean --force
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci && npm cache clean --force
 
-# Copy source code
+# Copy source code and build configuration
 COPY . .
 
 # Build the application
@@ -21,12 +21,15 @@ RUN npm run build
 # Stage 2: Production stage
 FROM node:18-alpine AS production
 
+# Install security updates and required packages
+RUN apk update && apk upgrade && apk add --no-cache dumb-init
+
 # Create app directory
 WORKDIR /app
 
-# Create non-root user
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S nestjs -u 1001
+# Create non-root user with specific UID/GID
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nestjs -u 1001 -G nodejs
 
 # Copy package files
 COPY package*.json ./
@@ -37,8 +40,8 @@ RUN npm ci --only=production && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 
-# Copy other necessary files
-COPY --chown=nestjs:nodejs env.example .env
+# Copy email templates if they exist
+COPY --from=builder --chown=nestjs:nodejs /app/src/templates ./src/templates
 
 # Switch to non-root user
 USER nestjs
@@ -47,8 +50,11 @@ USER nestjs
 EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node dist/main.js --health-check || exit 1
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/v1/health || exit 1
+
+# Use dumb-init to handle signals properly
+ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
 CMD ["node", "dist/main.js"]

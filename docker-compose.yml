@@ -1,33 +1,165 @@
 version: '3.8'
 
+networks:
+  web:
+    external: true
+  agent-network:
+    driver: bridge
+
 services:
+  # Agent Portal Backend
+  agent-backend:
+    image: planettalk/agent-portal-backend:latest
+    container_name: agent-backend-prod
+    restart: unless-stopped
+    profiles: ["prod"]
+    networks:
+      - web
+      - agent-network
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - API_PREFIX=api/v1
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=agent_portal
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRES_IN=24h
+      - BCRYPT_ROUNDS=12
+      - MAILGUN_API_KEY=${MAILGUN_API_KEY}
+      - MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
+    expose:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.agent.rule=Host(`api.planettalk.com`)"
+      - "traefik.http.routers.agent.entrypoints=websecure"
+      - "traefik.http.routers.agent.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agent.loadbalancer.server.port=3000"
+      - "traefik.http.routers.agent.middlewares=global-sec-headers@file,global-ratelimit@file,global-compress@file"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Agent Portal Backend (Development)
+  agent-backend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: agent-backend-dev
+    restart: unless-stopped
+    profiles: ["dev"]
+    networks:
+      - agent-network
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - API_PREFIX=api/v1
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=postgres
+      - DB_PASSWORD=password
+      - DB_NAME=agent_portal
+      - JWT_SECRET=dev-secret-key-change-in-production
+      - JWT_EXPIRES_IN=24h
+      - BCRYPT_ROUNDS=10
+      - MAILGUN_API_KEY=${MAILGUN_API_KEY:-}
+      - MAILGUN_DOMAIN=${MAILGUN_DOMAIN:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - /app/node_modules
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # PostgreSQL Database (shared by both environments)
   postgres:
-    image: postgres:15
+    image: postgres:15-alpine
     container_name: agent-portal-postgres
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    networks:
+      - agent-network
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: miraslavklose10
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
       POSTGRES_DB: agent_portal
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./init-scripts:/docker-entrypoint-initdb.d
-    restart: unless-stopped
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d agent_portal"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  # Optional: pgAdmin for database management
+  # Redis (shared by both environments)
+  redis:
+    image: redis:7-alpine
+    container_name: agent-portal-redis
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    networks:
+      - agent-network
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass $REDIS_PASSWORD}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # pgAdmin (development only)
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: agent-portal-pgadmin
+    restart: unless-stopped
+    profiles: ["dev"]
+    networks:
+      - agent-network
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@example.com
       PGADMIN_DEFAULT_PASSWORD: admin123
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "8080:80"
     depends_on:
-      - postgres
-    restart: unless-stopped
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
     driver: local
