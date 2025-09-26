@@ -32,6 +32,9 @@ services:
       - BCRYPT_ROUNDS=12
       - MAILGUN_API_KEY=${MAILGUN_API_KEY}
       - MAILGUN_DOMAIN=${MAILGUN_DOMAIN}
+      - MAILGUN_FROM_EMAIL=${MAILGUN_FROM_EMAIL}
+      - MAILGUN_FROM_NAME=${MAILGUN_FROM_NAME}
+      - MAILGUN_API_URL=${MAILGUN_API_URL}
     expose:
       - "3000"
     depends_on:
