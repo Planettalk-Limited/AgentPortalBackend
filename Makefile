@@ -61,7 +61,8 @@ dev-up: ## Start development environment
 	@echo "✅ Development environment started!"
 	@echo "📱 API: http://localhost:3000/api/v1"
 	@echo "📚 Docs: http://localhost:3000/api/v1/docs"
-	@echo "🗄️  pgAdmin: http://localhost:8080"
+	@echo "🗄️  Adminer: http://localhost:8081"
+	@echo "🗄️  pgAdmin: http://localhost:8082 (fallback)"
 
 dev-down: ## Stop development environment
 	@echo "🛑 Stopping development environment..."

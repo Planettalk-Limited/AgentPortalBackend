@@ -138,7 +138,32 @@ services:
       timeout: 5s
       retries: 5
 
-  # pgAdmin (development only)
+  # Adminer (database management - both dev and prod)
+  adminer:
+    image: adminer:latest
+    container_name: agent-portal-adminer
+    restart: unless-stopped
+    profiles: ["dev", "prod"]
+    networks:
+      - web
+      - agent-network
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha-dark
+    ports:
+      - "8081:8080"   # Different port to avoid Traefik conflict
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.adminer.rule=Host(`db.planettalk.com`)"
+      - "traefik.http.routers.adminer.entrypoints=websecure"
+      - "traefik.http.routers.adminer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
+      - "traefik.http.routers.adminer.middlewares=global-sec-headers@file"
+
+  # pgAdmin (development only - fallback)
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: agent-portal-pgadmin
@@ -151,7 +176,7 @@ services:
       PGADMIN_DEFAULT_PASSWORD: admin123
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "8080:80"
+      - "8082:80"   # Changed port to avoid conflicts
     depends_on:
       postgres:
         condition: service_healthy
