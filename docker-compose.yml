@@ -160,11 +160,11 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.adminer.rule=Host(`db.planettalk.com`)"
-      - "traefik.http.routers.adminer.entrypoints=websecure"
-      - "traefik.http.routers.adminer.tls.certresolver=letsencrypt"
-      - "traefik.http.services.adminer.loadbalancer.server.port=8080"
-      - "traefik.http.routers.adminer.middlewares=global-sec-headers@file"
+      - "traefik.http.routers.agent-portal-adminer.rule=Host(`db.planettalk.com`)"
+      - "traefik.http.routers.agent-portal-adminer.entrypoints=websecure"
+      - "traefik.http.routers.agent-portal-adminer.tls.certresolver=letsencrypt"
+      - "traefik.http.services.agent-portal-adminer.loadbalancer.server.port=8080"
+      - "traefik.http.routers.agent-portal-adminer.middlewares=global-sec-headers@file"
 
   # pgAdmin (development only - fallback)
   pgadmin:
