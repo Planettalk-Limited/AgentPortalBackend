@@ -192,7 +192,7 @@ export class NotificationsService {
           actionText: notification.actionText,
           priority: notification.priority,
           type: notification.type,
-          dashboardUrl: process.env.FRONTEND_URL + '/dashboard',
+          dashboardUrl: process.env.FRONTEND_URL + '/en/dashboard',
         }
       );
     } catch (error) {

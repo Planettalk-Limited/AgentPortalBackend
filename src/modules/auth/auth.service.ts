@@ -340,7 +340,7 @@ export class AuthService {
     });
 
     // Send password reset email via Mailgun
-    const resetUrl = `${this.configService.get('FRONTEND_URL')}/reset-password?token=${resetToken}`;
+    const resetUrl = `${this.configService.get('FRONTEND_URL')}/en/reset-password?token=${resetToken}`;
     const has2FA = user.metadata?.twoFactorEnabled === true;
     
     try {

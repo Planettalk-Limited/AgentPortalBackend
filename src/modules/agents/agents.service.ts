@@ -16,6 +16,7 @@ import { UseReferralCodeDto } from './dto/use-referral-code.dto';
 import { CreatePayoutRequestDto } from './dto/create-payout-request.dto';
 import { UpdatePayoutStatusDto } from './dto/update-payout-status.dto';
 import { CreateEarningAdjustmentDto, AdjustmentType } from './dto/create-earning-adjustment.dto';
+import { BulkEarningsUploadDto, BulkEarningsUploadResultDto, EarningEntryDto } from './dto/bulk-earnings-upload.dto';
 import { EmailService } from '../email/email.service';
 import { User } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -444,7 +445,7 @@ export class AgentsService {
 
     // Generate temporary password
     const temporaryPassword = crypto.randomBytes(8).toString('hex');
-    const loginUrl = process.env.FRONTEND_URL || 'http://localhost:3001/login';
+    const loginUrl = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en/login';
 
     // Send credentials email
     const emailSent = await this.emailService.sendAgentCredentials(
@@ -762,7 +763,7 @@ export class AgentsService {
       tier: agent.tier,
       minimumPayout: '3', // Default minimum payout
       payoutProcessing: 'Monthly on the 15th',
-      loginUrl: process.env.FRONTEND_URL || 'https://portal.planettalk.com',
+      loginUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'https://portal.planettalk.com/en',
       supportEmail: 'support@planettalk.com',
       supportPhone: '+1-800-PLANET-TALK',
     };
@@ -2265,7 +2266,7 @@ export class AgentsService {
         day: 'numeric',
       }),
       description: payout.description || 'Agent commission payout',
-      agentPortalUrl: process.env.FRONTEND_URL || 'https://portal.planettalk.com',
+      agentPortalUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'https://portal.planettalk.com/en',
       supportEmail: 'support@planettalk.com',
       supportPhone: '+1-800-PLANET-TALK',
     };
@@ -2312,7 +2313,7 @@ export class AgentsService {
       transactionId: payout.transactionId,
       adminNotes: payout.adminNotes,
       paymentDetails: payout.paymentDetails,
-      agentPortalUrl: process.env.FRONTEND_URL || 'https://portal.planettalk.com',
+      agentPortalUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'https://portal.planettalk.com/en',
       supportEmail: 'support@planettalk.com',
       supportPhone: '+1-800-PLANET-TALK',
     };
@@ -2400,5 +2401,208 @@ export class AgentsService {
       day: 'numeric',
       year: 'numeric',
     });
+  }
+
+  /**
+   * Bulk upload earnings for multiple agents by agent codes
+   */
+  async bulkUploadEarnings(bulkUploadDto: BulkEarningsUploadDto): Promise<BulkEarningsUploadResultDto> {
+    const startTime = Date.now();
+    const batchId = `BATCH-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const result: BulkEarningsUploadResultDto = {
+      totalProcessed: bulkUploadDto.earnings.length,
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+      totalAmount: 0,
+      updatedAgents: [],
+      details: [],
+      errorSummary: {
+        invalidAgentCodes: [],
+        duplicateReferences: [],
+        validationErrors: [],
+        otherErrors: [],
+      },
+      batchInfo: {
+        batchId,
+        processedAt: new Date(),
+        processingTimeMs: 0,
+        uploadedBy: 'admin', // In a real app, get from JWT token
+      },
+    };
+
+    // Track which agents need balance updates
+    const agentBalanceUpdates = new Map<string, { agent: Agent; totalEarnings: number; count: number }>();
+    const processedReferenceIds = new Set<string>();
+    
+    try {
+      // First pass: validate all agent codes and collect agents
+      const agentCodeMap = new Map<string, Agent>();
+      const uniqueAgentCodes = [...new Set(bulkUploadDto.earnings.map(e => e.agentCode))];
+      
+      for (const agentCode of uniqueAgentCodes) {
+        try {
+          const agent = await this.agentsRepository.findOne({
+            where: { agentCode },
+            relations: ['user'],
+          });
+          
+          if (agent) {
+            agentCodeMap.set(agentCode, agent);
+          } else {
+            result.errorSummary.invalidAgentCodes.push(agentCode);
+          }
+        } catch (error) {
+          result.errorSummary.invalidAgentCodes.push(agentCode);
+        }
+      }
+
+      // Second pass: process each earning entry
+      for (let i = 0; i < bulkUploadDto.earnings.length; i++) {
+        const earningEntry = bulkUploadDto.earnings[i];
+        const detailResult: {
+          agentCode: string;
+          status: 'success' | 'failed' | 'skipped';
+          earningId?: string;
+          amount?: number;
+          error?: string;
+          message?: string;
+        } = {
+          agentCode: earningEntry.agentCode,
+          status: 'failed',
+          amount: earningEntry.amount,
+        };
+
+        try {
+          // Check if agent exists
+          const agent = agentCodeMap.get(earningEntry.agentCode);
+          if (!agent) {
+            detailResult.error = 'Agent code not found';
+            result.details.push(detailResult);
+            result.failed++;
+            continue;
+          }
+
+          // Check for duplicate reference ID
+          if (earningEntry.referenceId && processedReferenceIds.has(earningEntry.referenceId)) {
+            detailResult.status = 'skipped';
+            detailResult.error = 'Duplicate reference ID in this batch';
+            result.details.push(detailResult);
+            result.skipped++;
+            result.errorSummary.duplicateReferences.push(earningEntry.referenceId);
+            continue;
+          }
+
+          // Check for existing reference ID in database
+          if (earningEntry.referenceId) {
+            const existingEarning = await this.earningsRepository.findOne({
+              where: { referenceId: earningEntry.referenceId },
+            });
+            
+            if (existingEarning) {
+              detailResult.status = 'skipped';
+              detailResult.error = 'Reference ID already exists in database';
+              result.details.push(detailResult);
+              result.skipped++;
+              result.errorSummary.duplicateReferences.push(earningEntry.referenceId);
+              continue;
+            }
+            
+            processedReferenceIds.add(earningEntry.referenceId);
+          }
+
+          // Create earning record
+          const earning = this.earningsRepository.create({
+            agentId: agent.id,
+            type: earningEntry.type,
+            amount: earningEntry.amount,
+            currency: earningEntry.currency || 'USD',
+            commissionRate: earningEntry.commissionRate,
+            description: earningEntry.description,
+            referenceId: earningEntry.referenceId,
+            earnedAt: earningEntry.earnedAt ? new Date(earningEntry.earnedAt) : new Date(),
+            status: bulkUploadDto.autoConfirm ? EarningStatus.CONFIRMED : EarningStatus.PENDING,
+            metadata: {
+              batchId,
+              batchDescription: bulkUploadDto.batchDescription,
+              uploadedBy: 'admin', // In a real app, get from JWT token
+              uploadedAt: new Date(),
+              ...bulkUploadDto.metadata,
+            },
+          });
+
+          const savedEarning = await this.earningsRepository.save(earning);
+          
+          // Track agent for balance update (only if confirmed)
+          if (bulkUploadDto.autoConfirm) {
+            if (agentBalanceUpdates.has(agent.id)) {
+              const update = agentBalanceUpdates.get(agent.id)!;
+              update.totalEarnings += earningEntry.amount;
+              update.count++;
+            } else {
+              agentBalanceUpdates.set(agent.id, {
+                agent,
+                totalEarnings: earningEntry.amount,
+                count: 1,
+              });
+            }
+          }
+
+          detailResult.status = 'success';
+          detailResult.earningId = savedEarning.id;
+          detailResult.message = bulkUploadDto.autoConfirm ? 'Earning created and confirmed' : 'Earning created (pending approval)';
+          result.details.push(detailResult);
+          result.successful++;
+          result.totalAmount += earningEntry.amount;
+
+        } catch (error) {
+          detailResult.error = error.message || 'Unknown error occurred';
+          result.details.push(detailResult);
+          result.failed++;
+          result.errorSummary.otherErrors.push(`${earningEntry.agentCode}: ${detailResult.error}`);
+        }
+      }
+
+      // Third pass: update agent balances if auto-confirm is enabled
+      if (bulkUploadDto.autoConfirm && agentBalanceUpdates.size > 0) {
+        for (const [agentId, update] of agentBalanceUpdates) {
+          try {
+            const agent = update.agent;
+            agent.totalEarnings += update.totalEarnings;
+            agent.availableBalance += update.totalEarnings;
+            
+            await this.agentsRepository.save(agent);
+            result.updatedAgents.push(agent.agentCode);
+
+            // Send notification to agent about new earnings
+            if (agent.user) {
+              await this.notificationsService.createNotification({
+                userId: agent.user.id,
+                type: NotificationType.EARNINGS,
+                title: 'New Earnings Added',
+                message: `${update.count} new earning${update.count > 1 ? 's' : ''} totaling $${update.totalEarnings.toFixed(2)} ${update.count > 1 ? 'have' : 'has'} been added to your account.`,
+                priority: NotificationPriority.MEDIUM,
+                actionUrl: `/earnings`,
+                actionText: 'View Earnings',
+              });
+            }
+          } catch (error) {
+            // Log the error but don't fail the entire operation
+            console.error(`Failed to update balance for agent ${update.agent.agentCode}:`, error);
+          }
+        }
+      }
+
+    } catch (error) {
+      // Handle any unexpected errors
+      console.error('Bulk earnings upload error:', error);
+      result.errorSummary.otherErrors.push(`Batch processing error: ${error.message}`);
+    }
+
+    // Calculate processing time
+    result.batchInfo.processingTimeMs = Date.now() - startTime;
+
+    return result;
   }
 }

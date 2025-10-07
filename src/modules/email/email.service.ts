@@ -298,7 +298,7 @@ export class EmailService {
       templateData: {
         agentName,
         ...payoutData,
-        dashboardUrl: payoutData.dashboardUrl || process.env.FRONTEND_URL + '/dashboard',
+        dashboardUrl: payoutData.dashboardUrl || process.env.FRONTEND_URL + '/en/dashboard',
         subtitle: 'Payout Status Update',
       },
     });
@@ -342,7 +342,7 @@ export class EmailService {
         timestamp: new Date().toLocaleString(),
         ipAddress: ipAddress || 'Unknown',
         deviceInfo: deviceInfo || 'Unknown device',
-        dashboardUrl: process.env.FRONTEND_URL + '/dashboard',
+        dashboardUrl: process.env.FRONTEND_URL + '/en/dashboard',
         subtitle: `Two-Factor Authentication ${action.charAt(0).toUpperCase() + action.slice(1)}`,
       },
     });
@@ -364,7 +364,7 @@ export class EmailService {
         otp,
         expiryMinutes: 10,
         loginTime: new Date().toLocaleString(),
-        dashboardUrl: process.env.FRONTEND_URL + '/dashboard',
+        dashboardUrl: process.env.FRONTEND_URL + '/en/dashboard',
         subtitle: 'Your Login Verification Code',
       },
     });

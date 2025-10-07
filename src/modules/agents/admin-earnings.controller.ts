@@ -11,6 +11,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthGuard } from '@nestjs/passport';
 import { AgentsService } from './agents.service';
 import { CreateEarningAdjustmentDto } from './dto/create-earning-adjustment.dto';
+import { BulkEarningsUploadDto, BulkEarningsUploadResultDto } from './dto/bulk-earnings-upload.dto';
 
 @ApiTags('Admin - Earnings Management')
 @ApiBearerAuth()
@@ -133,5 +134,29 @@ export class AdminEarningsController {
     @Body() bulkData: { earningIds: string[]; reason: string; notes?: string }
   ) {
     return this.agentsService.bulkRejectEarnings(bulkData.earningIds, bulkData.reason, bulkData.notes);
+  }
+
+  @Post('bulk-upload')
+  @ApiOperation({ 
+    summary: 'Bulk upload earnings for multiple agents (Admin only)',
+    description: 'Upload earnings data for multiple agents using their agent codes. This endpoint will validate agent codes, create earnings records, and update agent balances accordingly.'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Bulk earnings upload completed successfully',
+    type: BulkEarningsUploadResultDto
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Invalid request data or validation errors'
+  })
+  @ApiResponse({ 
+    status: 413, 
+    description: 'Request payload too large (max 1000 entries per batch)'
+  })
+  bulkUploadEarnings(
+    @Body() bulkUploadDto: BulkEarningsUploadDto
+  ): Promise<BulkEarningsUploadResultDto> {
+    return this.agentsService.bulkUploadEarnings(bulkUploadDto);
   }
 }
