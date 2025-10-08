@@ -16,6 +16,7 @@ import { AdminModule } from './modules/admin/admin.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { TrainingModule } from './modules/training/training.module';
 import { TasksModule } from './modules/tasks/tasks.module';
+import { ResourcesModule } from './modules/resources/resources.module';
 import { RewardsSeederModule } from './database/seeders/rewards-seeder.module';
 import { PlanetTalkSeederModule } from './database/seeders/planettalk-seeder.module';
 
@@ -50,6 +51,7 @@ import { PlanetTalkSeederModule } from './database/seeders/planettalk-seeder.mod
     NotificationsModule,
     TrainingModule,
     TasksModule,
+    ResourcesModule,
     RewardsSeederModule,
     PlanetTalkSeederModule,
   ],

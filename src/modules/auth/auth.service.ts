@@ -5,7 +5,7 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 
 import { UsersService } from '../users/users.service';
-import { User } from '../users/entities/user.entity';
+import { User, UserStatus } from '../users/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { TwoFactorService } from './two-factor.service';
@@ -37,6 +37,30 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check if email is verified for users in PENDING status
+    if (user.status === UserStatus.PENDING && !user.emailVerifiedAt) {
+      // Auto-send verification OTP
+      const otpResult = await this.sendEmailVerificationOTP(user.email);
+      
+      return {
+        success: false,
+        requiresEmailVerification: true,
+        emailVerified: false,
+        message: 'Please verify your email address to complete login.',
+        email: user.email,
+        otpSent: otpResult.success,
+        otpMessage: otpResult.message,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          status: user.status,
+          emailVerified: false,
+        },
+      };
+    }
+
     // Check if this is a first login for a pending user
     const isFirstLoginPendingUser = user.isFirstLogin && user.status === 'pending';
     let approvalData = null;
@@ -59,6 +83,8 @@ export class AuthService {
     };
 
     const baseResponse = {
+      success: true,
+      emailVerified: true,
       access_token: this.jwtService.sign(payload),
       user: {
         id: user.id,
@@ -69,6 +95,7 @@ export class AuthService {
         role: user.role,
         status: approvalData?.user?.status || user.status,
         isFirstLogin: false, // Reset after successful login
+        emailVerified: !!user.emailVerifiedAt,
       },
     };
 
@@ -340,7 +367,9 @@ export class AuthService {
     });
 
     // Send password reset email via Mailgun
-    const resetUrl = `${this.configService.get('FRONTEND_URL')}/en/reset-password?token=${resetToken}`;
+    const resetUrl = process.env.NODE_ENV === 'production' 
+      ? `https://portal.planettalk.com/en/auth/reset-password?token=${resetToken}`
+      : `${this.configService.get('FRONTEND_URL') || 'http://localhost:3001'}/en/auth/reset-password?token=${resetToken}`;
     const has2FA = user.metadata?.twoFactorEnabled === true;
     
     try {
@@ -550,11 +579,164 @@ export class AuthService {
           firstName: user.firstName,
           lastName: user.lastName,
           role: user.role,
+          emailVerified: !!user.emailVerifiedAt,
         },
       };
     } catch (error) {
       console.error('Error verifying OTP:', error);
       return { success: false, message: 'OTP verification failed' };
+    }
+  }
+
+  /**
+   * Send email verification OTP to user
+   */
+  async sendEmailVerificationOTP(email: string): Promise<{ success: boolean; message: string }> {
+    try {
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        return { success: false, message: 'User not found' };
+      }
+
+      // Check if email is already verified
+      if (user.emailVerifiedAt) {
+        return { success: false, message: 'Email is already verified' };
+      }
+
+      // Check if user is in correct status for email verification
+      if (user.status !== UserStatus.PENDING) {
+        return { success: false, message: 'User account is not in pending verification status' };
+      }
+
+      // Generate 6-digit OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpiry = new Date();
+      otpExpiry.setMinutes(otpExpiry.getMinutes() + 15); // 15 minutes expiry for email verification
+
+      // Save OTP to user metadata
+      await this.usersService.update(user.id, {
+        metadata: {
+          ...user.metadata,
+          emailVerificationOTP: otp,
+          emailVerificationOTPExpiry: otpExpiry.toISOString(),
+        },
+      });
+
+      // Send verification email
+      const emailSent = await this.emailService.sendEmailVerificationOTP(
+        user.email,
+        user.firstName,
+        otp
+      );
+
+      return {
+        success: emailSent,
+        message: emailSent 
+          ? 'Verification code sent successfully to your email'
+          : 'Failed to send verification email',
+      };
+    } catch (error) {
+      console.error('Error sending email verification OTP:', error);
+      return { success: false, message: 'Failed to send verification code' };
+    }
+  }
+
+  /**
+   * Verify email using OTP code
+   */
+  async verifyEmailOTP(email: string, otp: string): Promise<{ success: boolean; message: string; user?: any }> {
+    try {
+      const user = await this.usersService.findByEmail(email);
+      if (!user) {
+        return { success: false, message: 'User not found' };
+      }
+
+      // Check if email is already verified
+      if (user.emailVerifiedAt) {
+        return { success: false, message: 'Email is already verified' };
+      }
+
+      const storedOTP = user.metadata?.emailVerificationOTP;
+      const otpExpiry = user.metadata?.emailVerificationOTPExpiry;
+
+      if (!storedOTP || !otpExpiry) {
+        return { success: false, message: 'No verification code found. Please request a new one.' };
+      }
+
+      // Check if OTP expired
+      if (new Date() > new Date(otpExpiry)) {
+        return { success: false, message: 'Verification code expired. Please request a new one.' };
+      }
+
+      // Verify OTP
+      if (storedOTP !== otp) {
+        return { success: false, message: 'Invalid verification code' };
+      }
+
+      // Mark email as verified and activate user
+      await this.usersService.update(user.id, {
+        emailVerifiedAt: new Date(),
+        status: UserStatus.ACTIVE,
+        metadata: {
+          ...user.metadata,
+          emailVerificationOTP: null,
+          emailVerificationOTPExpiry: null,
+          emailVerifiedAt: new Date().toISOString(),
+        },
+      });
+
+      // Send welcome email with agent code after successful verification
+      try {
+        const agents = await this.usersService.getUserAgents(user.id);
+        if (agents && agents.length > 0) {
+          const agent = agents[0]; // Get the first agent
+          
+          // Send agent welcome email with credentials and agent code
+          const emailData = {
+            firstName: user.firstName,
+            lastName: user.lastName,
+            fullName: `${user.firstName} ${user.lastName}`,
+            email: user.email,
+            username: user.email, // Email is the username
+            agentCode: agent.agentCode,
+            commissionRate: agent.commissionRate.toString(),
+            tier: agent.tier,
+            minimumPayout: '3', // Default minimum payout
+            payoutProcessing: 'Monthly on the 15th',
+            loginUrl: process.env.NODE_ENV === 'production' 
+              ? 'https://portal.planettalk.com/en'
+              : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
+            supportEmail: 'support@planettalk.com',
+            supportPhone: '+1-800-PLANET-TALK',
+          };
+
+          await this.emailService.sendEmail({
+            to: user.email,
+            subject: 'Welcome to PlanetTalk Agent Program - Account Activated!',
+            template: 'agent-credentials',
+            templateData: emailData,
+          });
+        }
+      } catch (error) {
+        console.error('Failed to send welcome email after verification:', error);
+        // Don't fail the verification if email fails
+      }
+
+      return {
+        success: true,
+        message: 'Email verified successfully! Your account is now active and your agent credentials have been sent to your email.',
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          status: UserStatus.ACTIVE,
+          emailVerified: true,
+        },
+      };
+    } catch (error) {
+      console.error('Error verifying email OTP:', error);
+      return { success: false, message: 'Email verification failed' };
     }
   }
 }

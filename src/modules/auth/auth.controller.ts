@@ -12,6 +12,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ComprehensiveUpdateProfileDto } from './dto/comprehensive-update-profile.dto';
 import { UpdatePreferencesDto, UpdateSecuritySettingsDto, NotificationPreferencesDto } from './dto/update-preferences.dto';
 import { Verify2FADto, Setup2FADto, Disable2FADto } from './dto/verify-2fa.dto';
+import { VerifyEmailDto, ResendVerificationDto } from './dto/verify-email.dto';
 import { TwoFactorService } from './two-factor.service';
 import { UsersService } from '../users/users.service';
 
@@ -26,30 +27,79 @@ export class AuthController {
 
   @UseGuards(AuthGuard('local'))
   @Post('login')
-  @ApiOperation({ summary: 'User login (Step 1 - Password)' })
+  @ApiOperation({ 
+    summary: 'User login (Step 1 - Password)',
+    description: 'Authenticate user with email and password. May require email verification or 2FA depending on user status.'
+  })
   @ApiBody({ type: LoginDto })
-  @ApiResponse({ status: 200, description: 'Login successful or 2FA required' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ 
+    status: 200, 
+    description: 'Login successful, requires email verification, or requires 2FA',
+    schema: {
+      oneOf: [
+        {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: true },
+            emailVerified: { type: 'boolean', example: true },
+            access_token: { type: 'string' },
+            user: { type: 'object' }
+          }
+        },
+        {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            requiresEmailVerification: { type: 'boolean', example: true },
+            emailVerified: { type: 'boolean', example: false },
+            message: { type: 'string' },
+            otpSent: { type: 'boolean' }
+          }
+        },
+        {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean', example: false },
+            requires2FA: { type: 'boolean', example: true },
+            message: { type: 'string' },
+            otpSent: { type: 'boolean' }
+          }
+        }
+      ]
+    }
+  })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto, @Request() req: any) {
-    // Check if user requires 2FA
-    const twoFactorCheck = await this.twoFactorService.check2FARequired(loginDto.email);
+    // First attempt normal login
+    const loginResult = await this.authService.login(loginDto);
     
-    if (twoFactorCheck.required) {
-      // Send OTP email
-      const otpResult = await this.authService.sendOTPEmail(loginDto.email);
+    // If login requires email verification, return that response
+    if ('requiresEmailVerification' in loginResult && loginResult.requiresEmailVerification) {
+      return loginResult;
+    }
+    
+    // If login was successful but user has 2FA enabled, check for 2FA requirement
+    if ('success' in loginResult && loginResult.success) {
+      const twoFactorCheck = await this.twoFactorService.check2FARequired(loginDto.email);
+      
+      if (twoFactorCheck.required) {
+        // Send OTP email for 2FA
+        const otpResult = await this.authService.sendOTPEmail(loginDto.email);
 
-      return {
-        success: false,
-        requires2FA: true,
-        message: 'OTP sent to your email. Please enter the 6-digit code.',
-        email: loginDto.email,
-        otpSent: otpResult.success,
-        otpMessage: otpResult.message,
-      };
+        return {
+          success: false,
+          requires2FA: true,
+          emailVerified: true,
+          message: 'OTP sent to your email. Please enter the 6-digit code.',
+          email: loginDto.email,
+          otpSent: otpResult.success,
+          otpMessage: otpResult.message,
+        };
+      }
     }
 
-    // No 2FA required, proceed with normal login
-    return this.authService.login(loginDto);
+    // Return the normal login result
+    return loginResult;
   }
 
   @Post('register')
@@ -272,5 +322,29 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
   async resetPassword(@Body() data: ResetPasswordDto) {
     return this.authService.resetPassword(data.token, data.newPassword);
+  }
+
+  @Post('send-email-verification')
+  @ApiOperation({ 
+    summary: 'Send email verification code',
+    description: 'Send a 6-digit OTP to the user\'s email for account verification. Used after registration.'
+  })
+  @ApiBody({ type: ResendVerificationDto })
+  @ApiResponse({ status: 200, description: 'Verification code sent successfully' })
+  @ApiResponse({ status: 400, description: 'Email already verified or user not found' })
+  async sendEmailVerification(@Body() data: ResendVerificationDto) {
+    return this.authService.sendEmailVerificationOTP(data.email);
+  }
+
+  @Post('verify-email')
+  @ApiOperation({ 
+    summary: 'Verify email with OTP code',
+    description: 'Verify user email address using the 6-digit OTP code. This activates the user account and associated agent profile.'
+  })
+  @ApiBody({ type: VerifyEmailDto })
+  @ApiResponse({ status: 200, description: 'Email verified successfully, account activated' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired verification code' })
+  async verifyEmail(@Body() data: VerifyEmailDto) {
+    return this.authService.verifyEmailOTP(data.email, data.code);
   }
 }

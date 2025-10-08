@@ -192,7 +192,9 @@ export class NotificationsService {
           actionText: notification.actionText,
           priority: notification.priority,
           type: notification.type,
-          dashboardUrl: process.env.FRONTEND_URL + '/en/dashboard',
+          dashboardUrl: process.env.NODE_ENV === 'production' 
+            ? 'https://portal.planettalk.com/en/dashboard'
+            : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard'),
         }
       );
     } catch (error) {

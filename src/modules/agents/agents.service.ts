@@ -445,7 +445,9 @@ export class AgentsService {
 
     // Generate temporary password
     const temporaryPassword = crypto.randomBytes(8).toString('hex');
-    const loginUrl = process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en/login';
+    const loginUrl = process.env.NODE_ENV === 'production' 
+      ? 'https://portal.planettalk.com/en'
+      : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en');
 
     // Send credentials email
     const emailSent = await this.emailService.sendAgentCredentials(
@@ -763,7 +765,9 @@ export class AgentsService {
       tier: agent.tier,
       minimumPayout: '3', // Default minimum payout
       payoutProcessing: 'Monthly on the 15th',
-      loginUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'https://portal.planettalk.com/en',
+      loginUrl: process.env.NODE_ENV === 'production' 
+        ? 'https://portal.planettalk.com/en'
+        : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
       supportEmail: 'support@planettalk.com',
       supportPhone: '+1-800-PLANET-TALK',
     };
@@ -2266,7 +2270,9 @@ export class AgentsService {
         day: 'numeric',
       }),
       description: payout.description || 'Agent commission payout',
-      agentPortalUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'https://portal.planettalk.com/en',
+      agentPortalUrl: process.env.NODE_ENV === 'production' 
+        ? 'https://portal.planettalk.com/en'
+        : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
       supportEmail: 'support@planettalk.com',
       supportPhone: '+1-800-PLANET-TALK',
     };
@@ -2313,7 +2319,9 @@ export class AgentsService {
       transactionId: payout.transactionId,
       adminNotes: payout.adminNotes,
       paymentDetails: payout.paymentDetails,
-      agentPortalUrl: process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'https://portal.planettalk.com/en',
+      agentPortalUrl: process.env.NODE_ENV === 'production' 
+        ? 'https://portal.planettalk.com/en'
+        : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
       supportEmail: 'support@planettalk.com',
       supportPhone: '+1-800-PLANET-TALK',
     };

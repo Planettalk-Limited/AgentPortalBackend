@@ -9,6 +9,7 @@ import { User, UserRole, UserStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AgentsService } from '../agents/agents.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class UsersService {
@@ -18,6 +19,7 @@ export class UsersService {
     private configService: ConfigService,
     @Inject(forwardRef(() => AgentsService))
     private agentsService: AgentsService,
+    private emailService: EmailService,
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
@@ -74,28 +76,66 @@ export class UsersService {
     // Auto-create agent profile with referral data (but in PENDING status)
     const agentData = await this.agentsService.createPendingAgentWithReferralData(savedUser);
 
-    // Send welcome/credentials email with their login details
+    // Generate and send email verification OTP instead of welcome email
     try {
-      await this.agentsService.sendAgentWelcomeEmail(savedUser, agentData.agent);
-    } catch (error) {
-      console.error('Failed to send welcome email:', error);
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otpExpiry = new Date();
+      otpExpiry.setMinutes(otpExpiry.getMinutes() + 15); // 15 minutes expiry
+
+      // Save OTP to user metadata
+      await this.update(savedUser.id, {
+        metadata: {
+          ...savedUser.metadata,
+          emailVerificationOTP: otp,
+          emailVerificationOTPExpiry: otpExpiry.toISOString(),
+        },
+      });
+
+      // Send verification email
+      await this.emailService.sendEmailVerificationOTP(
+        savedUser.email,
+        savedUser.firstName,
+        otp
+      );
+    } catch (emailError) {
+      console.error('Failed to send verification email:', emailError);
       // Don't fail registration if email fails
     }
 
     return {
       success: true,
-      message: 'Registration successful. Please check your email for your agent details and next steps.',
+      message: 'Registration successful! Please check your email for the verification code. After verification, you will receive your agent credentials and welcome information.',
+      requiresEmailVerification: true,
       user: {
         id: savedUser.id,
         firstName: savedUser.firstName,
         lastName: savedUser.lastName,
         email: savedUser.email,
         status: savedUser.status,
+        emailVerified: false,
         createdAt: savedUser.createdAt,
+      },
+      agent: {
+        agentCode: agentData.agent.agentCode,
+        tier: agentData.agent.tier,
+        commissionRate: agentData.agent.commissionRate,
+        status: agentData.agent.status,
       },
       // Note: Don't return referral data until user is verified
       pendingVerification: true,
     };
+  }
+
+  /**
+   * Get user's agents
+   */
+  async getUserAgents(userId: string): Promise<any[]> {
+    const user = await this.usersRepository.findOne({
+      where: { id: userId },
+      relations: ['agents'],
+    });
+    
+    return user?.agents || [];
   }
 
   /**

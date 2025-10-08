@@ -298,7 +298,9 @@ export class EmailService {
       templateData: {
         agentName,
         ...payoutData,
-        dashboardUrl: payoutData.dashboardUrl || process.env.FRONTEND_URL + '/en/dashboard',
+        dashboardUrl: payoutData.dashboardUrl || (process.env.NODE_ENV === 'production' 
+          ? 'https://portal.planettalk.com/en/dashboard'
+          : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard')),
         subtitle: 'Payout Status Update',
       },
     });
@@ -342,7 +344,9 @@ export class EmailService {
         timestamp: new Date().toLocaleString(),
         ipAddress: ipAddress || 'Unknown',
         deviceInfo: deviceInfo || 'Unknown device',
-        dashboardUrl: process.env.FRONTEND_URL + '/en/dashboard',
+        dashboardUrl: process.env.NODE_ENV === 'production' 
+          ? 'https://portal.planettalk.com/en/dashboard'
+          : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard'),
         subtitle: `Two-Factor Authentication ${action.charAt(0).toUpperCase() + action.slice(1)}`,
       },
     });
@@ -364,8 +368,34 @@ export class EmailService {
         otp,
         expiryMinutes: 10,
         loginTime: new Date().toLocaleString(),
-        dashboardUrl: process.env.FRONTEND_URL + '/en/dashboard',
+        dashboardUrl: process.env.NODE_ENV === 'production' 
+          ? 'https://portal.planettalk.com/en/dashboard'
+          : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard'),
         subtitle: 'Your Login Verification Code',
+      },
+    });
+  }
+
+  async sendEmailVerificationOTP(
+    email: string,
+    firstName: string,
+    otp: string
+  ): Promise<boolean> {
+    const subject = '📧 Verify Your Email - Agent Portal';
+
+    return this.sendEmail({
+      to: email,
+      subject,
+      template: 'email-verification',
+      templateData: {
+        firstName,
+        otp,
+        expiryMinutes: 15,
+        verificationTime: new Date().toLocaleString(),
+        portalUrl: process.env.NODE_ENV === 'production' 
+          ? 'https://portal.planettalk.com/en'
+          : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
+        subtitle: 'Email Verification Required',
       },
     });
   }

@@ -21,5 +21,9 @@ export class UpdateUserDto extends PartialType(
   lastLoginAt?: Date;
 
   @IsOptional()
+  @IsDate()
+  emailVerifiedAt?: Date;
+
+  @IsOptional()
   isFirstLogin?: boolean;
 }
