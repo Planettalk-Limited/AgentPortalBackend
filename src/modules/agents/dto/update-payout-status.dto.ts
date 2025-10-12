@@ -22,11 +22,13 @@ export class UpdatePayoutStatusDto {
   @MaxLength(1000)
   adminNotes?: string;
 
-  @ApiPropertyOptional({ description: 'Rejection reason (required if status is rejected)' })
+  // Removed rejectionReason as REJECTED status is no longer supported
+
+  @ApiPropertyOptional({ description: 'Review message (used when status is set to review)' })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
-  rejectionReason?: string;
+  @MaxLength(1000)
+  reviewMessage?: string;
 
   @ApiPropertyOptional({ description: 'Transaction ID from payment processor' })
   @IsOptional()

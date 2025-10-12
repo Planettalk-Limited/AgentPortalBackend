@@ -14,6 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
+import { UpdateAgentEarningsDto, UpdateAgentReferralsDto, BulkUpdateEarningsDto, BulkUpdateReferralsDto, UpdateAgentStatsDto, BulkUpdateAgentStatsDto, UpdateAgentStatsByCodeDto, BulkUpdateAgentStatsByCodeDto } from './dto/update-agent-stats.dto';
 
 @ApiTags('Admin - Agent Management')
 @ApiBearerAuth()
@@ -144,6 +145,77 @@ export class AdminAgentsController {
   @ApiResponse({ status: 200, description: 'Agent earnings resumed' })
   resumeAgentEarnings(@Param('id') id: string, @Body() data?: { adminNotes?: string }) {
     return this.agentsService.resumeAgentEarnings(id, data?.adminNotes);
+  }
+
+  // External Stats Update Endpoints
+  @Post('update-earnings')
+  @ApiOperation({ summary: 'Update agent earnings externally (Admin)' })
+  @ApiResponse({ status: 200, description: 'Agent earnings updated successfully' })
+  @ApiResponse({ status: 404, description: 'Agent not found' })
+  @ApiResponse({ status: 400, description: 'Invalid earnings data' })
+  updateAgentEarnings(@Body() updateDto: UpdateAgentEarningsDto) {
+    return this.agentsService.updateAgentEarnings(updateDto);
+  }
+
+  @Post('update-referrals')
+  @ApiOperation({ summary: 'Update agent referrals externally (Admin)' })
+  @ApiResponse({ status: 200, description: 'Agent referrals updated successfully' })
+  @ApiResponse({ status: 404, description: 'Agent not found' })
+  @ApiResponse({ status: 400, description: 'Invalid referrals data' })
+  updateAgentReferrals(@Body() updateDto: UpdateAgentReferralsDto) {
+    return this.agentsService.updateAgentReferrals(updateDto);
+  }
+
+  @Post('bulk-update-earnings')
+  @ApiOperation({ summary: 'Bulk update multiple agents earnings (Admin)' })
+  @ApiResponse({ status: 200, description: 'Bulk earnings update completed' })
+  @ApiResponse({ status: 400, description: 'Invalid bulk earnings data' })
+  bulkUpdateEarnings(@Body() bulkDto: BulkUpdateEarningsDto) {
+    return this.agentsService.bulkUpdateEarnings(bulkDto);
+  }
+
+  @Post('bulk-update-referrals')
+  @ApiOperation({ summary: 'Bulk update multiple agents referrals (Admin)' })
+  @ApiResponse({ status: 200, description: 'Bulk referrals update completed' })
+  @ApiResponse({ status: 400, description: 'Invalid bulk referrals data' })
+  bulkUpdateReferrals(@Body() bulkDto: BulkUpdateReferralsDto) {
+    return this.agentsService.bulkUpdateReferrals(bulkDto);
+  }
+
+  // Combined Stats Update Endpoints
+  @Post('update-stats')
+  @ApiOperation({ summary: 'Update agent earnings and/or referrals in single request (Admin)' })
+  @ApiResponse({ status: 200, description: 'Agent stats updated successfully' })
+  @ApiResponse({ status: 404, description: 'Agent not found' })
+  @ApiResponse({ status: 400, description: 'Invalid stats data' })
+  updateAgentStats(@Body() updateDto: UpdateAgentStatsDto) {
+    return this.agentsService.updateAgentStats(updateDto);
+  }
+
+  @Post('bulk-update-stats')
+  @ApiOperation({ summary: 'Bulk update multiple agents stats (earnings and/or referrals) (Admin)' })
+  @ApiResponse({ status: 200, description: 'Bulk stats update completed' })
+  @ApiResponse({ status: 400, description: 'Invalid bulk stats data' })
+  bulkUpdateAgentStats(@Body() bulkDto: BulkUpdateAgentStatsDto) {
+    return this.agentsService.bulkUpdateAgentStats(bulkDto);
+  }
+
+  // Agent Code-based Endpoints
+  @Post('update-stats-by-code')
+  @ApiOperation({ summary: 'Update agent earnings and/or referrals by agent code (Admin)' })
+  @ApiResponse({ status: 200, description: 'Agent stats updated successfully' })
+  @ApiResponse({ status: 404, description: 'Agent not found' })
+  @ApiResponse({ status: 400, description: 'Invalid stats data' })
+  updateAgentStatsByCode(@Body() updateDto: UpdateAgentStatsByCodeDto) {
+    return this.agentsService.updateAgentStatsByCode(updateDto);
+  }
+
+  @Post('bulk-update-stats-by-code')
+  @ApiOperation({ summary: 'Bulk update multiple agents stats by agent codes (Admin)' })
+  @ApiResponse({ status: 200, description: 'Bulk stats update completed' })
+  @ApiResponse({ status: 400, description: 'Invalid bulk stats data' })
+  bulkUpdateAgentStatsByCode(@Body() bulkDto: BulkUpdateAgentStatsByCodeDto) {
+    return this.agentsService.bulkUpdateAgentStatsByCode(bulkDto);
   }
 
 }

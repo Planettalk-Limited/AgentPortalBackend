@@ -386,38 +386,38 @@ export class PlanetTalkSeeder {
     const airtimePayouts = [
       {
         amount: 25.00,
-        method: PayoutMethod.AIRTIME_TOPUP,
-        description: 'Weekly airtime allowance',
-        status: PayoutStatus.COMPLETED,
+        method: PayoutMethod.PLANETTALK_CREDIT,
+        description: 'Weekly PlanetTalk credit allowance',
+        status: PayoutStatus.APPROVED,
         paymentDetails: {
-          airtimeTopup: {
-            phoneNumber: '+233244567890',
+          planettalkCredit: {
+            planettalkMobile: '+233244567890',
             accountName: 'Kwame Asante',
           },
         },
       },
       {
         amount: 150.00,
-        method: PayoutMethod.MOBILE_MONEY,
+        method: PayoutMethod.BANK_TRANSFER,
         description: 'Monthly commission payout',
-        status: PayoutStatus.PROCESSING,
+        status: PayoutStatus.PENDING,
         paymentDetails: {
-          mobileMoney: {
-            phoneNumber: '+254701234567',
-            provider: 'M-Pesa',
+          bankAccount: {
+            accountNumber: '1234567890',
+            routingNumber: '123456789',
             accountName: 'Grace Wanjiku',
-            country: 'Kenya',
+            bankName: 'Kenya Commercial Bank',
           },
         },
       },
       {
         amount: 45.00,
-        method: PayoutMethod.AIRTIME_TOPUP,
-        description: 'Bi-weekly airtime payout',
-        status: PayoutStatus.REQUESTED,
+        method: PayoutMethod.PLANETTALK_CREDIT,
+        description: 'Bi-weekly PlanetTalk credit payout',
+        status: PayoutStatus.PENDING,
         paymentDetails: {
-          airtimeTopup: {
-            phoneNumber: '+263771234567',
+          planettalkCredit: {
+            planettalkMobile: '+263771234567',
             accountName: 'Thandiwe Moyo',
           },
         },

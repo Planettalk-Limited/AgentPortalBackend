@@ -1,4 +1,6 @@
 import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
@@ -11,6 +13,8 @@ import { JwtPayload } from './interfaces/jwt-payload.interface';
 import { TwoFactorService } from './two-factor.service';
 import { Verify2FADto } from './dto/verify-2fa.dto';
 import { EmailService } from '../email/email.service';
+import { AgentEarnings } from '../agents/entities/agent-earnings.entity';
+import { ReferralUsage } from '../agents/entities/referral-usage.entity';
 
 @Injectable()
 export class AuthService {
@@ -20,6 +24,10 @@ export class AuthService {
     private configService: ConfigService,
     private twoFactorService: TwoFactorService,
     private emailService: EmailService,
+    @InjectRepository(AgentEarnings)
+    private agentEarningsRepository: Repository<AgentEarnings>,
+    @InjectRepository(ReferralUsage)
+    private referralUsageRepository: Repository<ReferralUsage>,
   ) {}
 
   async validateUser(email: string, password: string): Promise<any> {
@@ -152,6 +160,9 @@ export class AuthService {
     if (user.role === 'agent' && user.agents && user.agents.length > 0) {
       const agent = user.agents[0]; // Get the primary agent record
       
+      // Calculate monthly statistics
+      const monthlyStats = await this.calculateMonthlyStats(agent.id);
+      
       return {
         ...profile,
         fullName: `${user.firstName} ${user.lastName}`,
@@ -160,10 +171,16 @@ export class AuthService {
           agentCode: agent.agentCode,
           status: agent.status,
           tier: agent.tier,
-          totalEarnings: agent.totalEarnings,
+          // All-time statistics
+          totalEarnings: agent.totalEarnings, // All-time total earnings
+          totalReferrals: agent.totalReferrals, // All-time total referrals
+          // Current balances
           availableBalance: agent.availableBalance,
           pendingBalance: agent.pendingBalance,
-          totalReferrals: agent.totalReferrals,
+          // Current month statistics
+          earningsThisMonth: monthlyStats.earningsThisMonth, // Earnings for current month
+          referralsThisMonth: monthlyStats.referralsThisMonth, // Referrals for current month
+          // Other agent data
           activeReferrals: agent.activeReferrals,
           commissionRate: agent.commissionRate,
           activatedAt: agent.activatedAt,
@@ -214,6 +231,38 @@ export class AuthService {
         permissions: profile.metadata?.permissions ?? [],
         lastAdminAction: profile.metadata?.lastAdminAction,
       } : undefined,
+    };
+  }
+
+  private async calculateMonthlyStats(agentId: string): Promise<{ earningsThisMonth: number; referralsThisMonth: number }> {
+    // Get current month start and end dates
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Calculate earnings this month
+    const earningsResult = await this.agentEarningsRepository
+      .createQueryBuilder('earning')
+      .select('SUM(earning.amount)', 'total')
+      .where('earning.agentId = :agentId', { agentId })
+      .andWhere('earning.earnedAt >= :startOfMonth', { startOfMonth })
+      .andWhere('earning.earnedAt <= :endOfMonth', { endOfMonth })
+      .andWhere('earning.status = :status', { status: 'confirmed' })
+      .getRawOne();
+
+    // Calculate referrals this month
+    const referralsResult = await this.referralUsageRepository
+      .createQueryBuilder('usage')
+      .leftJoin('usage.referralCode', 'code')
+      .where('code.agentId = :agentId', { agentId })
+      .andWhere('usage.usedAt >= :startOfMonth', { startOfMonth })
+      .andWhere('usage.usedAt <= :endOfMonth', { endOfMonth })
+      .andWhere('usage.status = :status', { status: 'confirmed' })
+      .getCount();
+
+    return {
+      earningsThisMonth: Number(earningsResult?.total || 0),
+      referralsThisMonth: referralsResult || 0,
     };
   }
 

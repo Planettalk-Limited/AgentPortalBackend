@@ -855,7 +855,7 @@ export class DatabaseSeeder {
 
     const payoutData = [
       {
-        status: PayoutStatus.COMPLETED,
+        status: PayoutStatus.APPROVED,
         method: PayoutMethod.BANK_TRANSFER,
         amount: 500.00,
         fees: 5.00,
@@ -878,8 +878,8 @@ export class DatabaseSeeder {
         },
       },
       {
-        status: PayoutStatus.PROCESSING,
-        method: PayoutMethod.PAYPAL,
+        status: PayoutStatus.PENDING,
+        method: PayoutMethod.BANK_TRANSFER,
         amount: 300.00,
         fees: 3.00,
         netAmount: 297.00,
@@ -898,7 +898,7 @@ export class DatabaseSeeder {
         },
       },
       {
-        status: PayoutStatus.REQUESTED,
+        status: PayoutStatus.PENDING,
         method: PayoutMethod.BANK_TRANSFER,
         amount: 750.00,
         fees: 0,

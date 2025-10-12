@@ -7,7 +7,9 @@ import {
   Param,
   Query,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthGuard } from '@nestjs/passport';
 import { AgentsService } from './agents.service';
@@ -43,6 +45,38 @@ export class AdminPayoutsController {
     return this.agentsService.getPayoutStats(period);
   }
 
+  @Get('export')
+  @ApiOperation({ summary: 'Export pending payouts to CSV (Admin)' })
+  @ApiResponse({ status: 200, description: 'CSV file download' })
+  async exportPayouts(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('format') format?: string,
+    @Query('status') status?: string,
+    @Query('method') method?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+    @Res() res?: Response
+  ) {
+    const exportData = await this.agentsService.exportPayouts({
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 20,
+      format: format || 'csv',
+      status: status || 'pending', // Default to pending payouts only
+      method,
+      startDate,
+      endDate,
+    });
+
+    if (format === 'csv' && res) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="pending-payouts-export-${new Date().toISOString().split('T')[0]}.csv"`);
+      return res.send(exportData.csvContent);
+    }
+
+    return exportData;
+  }
+
   @Patch(':id/approve')
   @ApiOperation({ summary: 'Approve payout request (Admin)' })
   @ApiResponse({ status: 200, description: 'Payout approved successfully' })
@@ -52,44 +86,37 @@ export class AdminPayoutsController {
     return this.agentsService.approvePayout(id, notes?.adminNotes);
   }
 
-  @Patch(':id/reject')
-  @ApiOperation({ summary: 'Reject payout request (Admin)' })
-  @ApiResponse({ status: 200, description: 'Payout rejected successfully' })
-  @ApiResponse({ status: 404, description: 'Payout not found' })
-  @ApiResponse({ status: 400, description: 'Invalid payout status transition' })
-  rejectPayout(
-    @Param('id') id: string,
-    @Body() data: { rejectionReason: string; adminNotes?: string }
-  ) {
-    return this.agentsService.rejectPayout(id, data.rejectionReason, data.adminNotes);
-  }
+  // Removed reject endpoint as REJECTED status is no longer supported
+  // Payouts can only be: PENDING, APPROVED, or REVIEW
 
-  @Patch(':id/process')
-  @ApiOperation({ summary: 'Mark payout as processing (Admin)' })
-  @ApiResponse({ status: 200, description: 'Payout marked as processing' })
+  @Patch(':id/review')
+  @ApiOperation({ summary: 'Set payout to review status (Admin)' })
+  @ApiResponse({ status: 200, description: 'Payout set to review successfully' })
   @ApiResponse({ status: 404, description: 'Payout not found' })
   @ApiResponse({ status: 400, description: 'Invalid payout status transition' })
-  processPayout(@Param('id') id: string, @Body() data?: { adminNotes?: string }) {
-    return this.agentsService.processPayout(id, data?.adminNotes);
-  }
-
-  @Patch(':id/complete')
-  @ApiOperation({ summary: 'Mark payout as completed (Admin)' })
-  @ApiResponse({ status: 200, description: 'Payout completed successfully' })
-  @ApiResponse({ status: 404, description: 'Payout not found' })
-  @ApiResponse({ status: 400, description: 'Invalid payout status transition' })
-  completePayout(
+  reviewPayout(
     @Param('id') id: string,
-    @Body() data: { transactionId: string; fees?: number; adminNotes?: string }
+    @Body() data: { reviewMessage: string; adminNotes?: string }
   ) {
-    return this.agentsService.completePayout(id, data);
+    return this.agentsService.reviewPayout(id, data.reviewMessage, data.adminNotes);
   }
 
   @Post('bulk-process')
   @ApiOperation({ summary: 'Bulk process multiple payouts (Admin)' })
   @ApiResponse({ status: 200, description: 'Bulk processing initiated' })
   @ApiResponse({ status: 400, description: 'Invalid bulk action or payout IDs' })
-  bulkProcessPayouts(@Body() data: { payoutIds: string[]; action: string; adminNotes?: string }) {
-    return this.agentsService.bulkProcessPayouts(data.payoutIds, data.action);
+  bulkProcessPayouts(@Body() data: { 
+    payoutIds: string[]; 
+    action: 'approve' | 'review'; 
+    adminNotes?: string;
+    reviewMessage?: string;
+    // New: Individual messages per payout
+    individualMessages?: { payoutId: string; reviewMessage: string }[];
+  }) {
+    return this.agentsService.bulkProcessPayouts(data.payoutIds, data.action, {
+      adminNotes: data.adminNotes,
+      reviewMessage: data.reviewMessage,
+      individualMessages: data.individualMessages,
+    });
   }
 }

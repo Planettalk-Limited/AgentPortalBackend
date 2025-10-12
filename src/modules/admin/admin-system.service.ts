@@ -42,9 +42,9 @@ export class AdminSystemService {
       this.payoutsRepository
         .createQueryBuilder('payout')
         .select('SUM(payout.amount)', 'total')
-        .where('payout.status = :status', { status: PayoutStatus.COMPLETED })
+        .where('payout.status = :status', { status: PayoutStatus.APPROVED })
         .getRawOne(),
-      this.payoutsRepository.count({ where: { status: PayoutStatus.REQUESTED } }),
+      this.payoutsRepository.count({ where: { status: PayoutStatus.PENDING } }),
       this.usersRepository.find({
         select: ['id', 'firstName', 'lastName', 'email', 'role', 'createdAt'],
         order: { createdAt: 'DESC' },

@@ -17,6 +17,7 @@ import { CreatePayoutRequestDto } from './dto/create-payout-request.dto';
 import { UpdatePayoutStatusDto } from './dto/update-payout-status.dto';
 import { CreateEarningAdjustmentDto, AdjustmentType } from './dto/create-earning-adjustment.dto';
 import { BulkEarningsUploadDto, BulkEarningsUploadResultDto, EarningEntryDto } from './dto/bulk-earnings-upload.dto';
+import { UpdateAgentEarningsDto, UpdateAgentReferralsDto, BulkUpdateEarningsDto, BulkUpdateReferralsDto, UpdateAgentStatsDto, BulkUpdateAgentStatsDto, UpdateAgentStatsByCodeDto, BulkUpdateAgentStatsByCodeDto } from './dto/update-agent-stats.dto';
 import { EmailService } from '../email/email.service';
 import { User } from '../users/entities/user.entity';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -221,6 +222,13 @@ export class AgentsService {
       }
     }
 
+    // Add monthly statistics to the agent object
+    const monthlyStats = await this.calculateAgentMonthlyStats(agent.id);
+    
+    // Add monthly statistics as additional properties to the agent object
+    (agent as any).earningsThisMonth = monthlyStats.earningsThisMonth;
+    (agent as any).referralsThisMonth = monthlyStats.referralsThisMonth;
+    
     return agent;
   }
 
@@ -846,24 +854,14 @@ export class AgentsService {
     // Validate payout method and payment details
     this.validatePayoutMethod(createPayoutRequestDto.method, createPayoutRequestDto.paymentDetails);
 
-    // Check for pending payouts
-    const pendingPayouts = await this.payoutsRepository.count({
-      where: { 
-        agentId, 
-        status: PayoutStatus.REQUESTED 
-      },
-    });
-
-    if (pendingPayouts > 0) {
-      throw new BadRequestException('Agent already has pending payout requests');
-    }
+    // Removed restriction on multiple pending payouts - agents can now have multiple pending requests
 
     const payout = this.payoutsRepository.create({
       ...createPayoutRequestDto,
       agentId,
       netAmount: createPayoutRequestDto.amount, // Will be adjusted when fees are calculated
       requestedAt: new Date(),
-      status: PayoutStatus.REQUESTED,
+      status: PayoutStatus.PENDING,
     });
 
     const savedPayout = await this.payoutsRepository.save(payout);
@@ -921,7 +919,7 @@ export class AgentsService {
     // Update payout details
     payout.status = updatePayoutStatusDto.status;
     payout.adminNotes = updatePayoutStatusDto.adminNotes;
-    payout.rejectionReason = updatePayoutStatusDto.rejectionReason;
+    payout.reviewMessage = updatePayoutStatusDto.reviewMessage;
     payout.transactionId = updatePayoutStatusDto.transactionId;
     
     if (updatePayoutStatusDto.fees !== undefined) {
@@ -934,12 +932,6 @@ export class AgentsService {
     switch (updatePayoutStatusDto.status) {
       case PayoutStatus.APPROVED:
         payout.approvedAt = now;
-        break;
-      case PayoutStatus.PROCESSING:
-        payout.processedAt = now;
-        break;
-      case PayoutStatus.COMPLETED:
-        payout.completedAt = now;
         break;
     }
 
@@ -954,27 +946,8 @@ export class AgentsService {
     return updatedPayout;
   }
 
-  async cancelPayout(id: string): Promise<{ success: boolean; message: string }> {
-    const payout = await this.getPayoutById(id);
-
-    if (!payout.isPending) {
-      throw new BadRequestException('Cannot cancel payout that is not in pending status');
-    }
-
-    payout.status = PayoutStatus.CANCELLED;
-    await this.payoutsRepository.save(payout);
-
-    // Return funds to available balance
-    const agent = payout.agent;
-    agent.pendingBalance -= payout.amount;
-    agent.availableBalance += payout.amount;
-    await this.agentsRepository.save(agent);
-
-    return {
-      success: true,
-      message: 'Payout cancelled successfully',
-    };
-  }
+  // Removed cancelPayout method as CANCELLED status is no longer supported
+  // Payouts can only be PENDING, APPROVED, REJECTED, or REVIEW
 
   async createEarningAdjustment(agentId: string, createAdjustmentDto: CreateEarningAdjustmentDto): Promise<AgentEarnings> {
     const agent = await this.findById(agentId);
@@ -1046,7 +1019,7 @@ export class AgentsService {
       },
       payouts: {
         total: payouts.reduce((sum, p) => sum + Number(p.amount), 0),
-        completed: payouts.filter(p => p.isCompleted).reduce((sum, p) => sum + Number(p.amount), 0),
+        approved: payouts.filter(p => p.isApproved).reduce((sum, p) => sum + Number(p.amount), 0),
         pending: payouts.filter(p => p.isPending).reduce((sum, p) => sum + Number(p.amount), 0),
         byStatus: this.groupPayoutsByStatus(payouts),
         recent: payouts.slice(0, 10),
@@ -1285,7 +1258,7 @@ export class AgentsService {
   async getPendingPayouts(): Promise<Payout[]> {
     return this.payoutsRepository.find({
       where: { 
-        status: PayoutStatus.REQUESTED 
+        status: PayoutStatus.PENDING 
       },
       relations: ['agent', 'agent.user'],
       order: { requestedAt: 'ASC' },
@@ -1320,49 +1293,88 @@ export class AgentsService {
     });
   }
 
-  async rejectPayout(id: string, rejectionReason: string, adminNotes?: string): Promise<Payout> {
+  // Removed rejectPayout method as REJECTED status is no longer supported
+  // Payouts can only be: PENDING, APPROVED, or REVIEW
+
+  async reviewPayout(id: string, reviewMessage: string, adminNotes?: string): Promise<Payout> {
     return this.updatePayoutStatus(id, {
-      status: PayoutStatus.REJECTED,
-      rejectionReason,
+      status: PayoutStatus.REVIEW,
+      reviewMessage,
       adminNotes,
     });
   }
 
-  async processPayout(id: string, adminNotes?: string): Promise<Payout> {
-    return this.updatePayoutStatus(id, {
-      status: PayoutStatus.PROCESSING,
-      adminNotes,
-    });
-  }
+  // Removed processPayout and completePayout methods as PROCESSING and COMPLETED statuses are no longer supported
+  // In the new system, APPROVED is the final status - external processing is handled outside the system
 
-  async completePayout(id: string, data: { transactionId: string; fees?: number; adminNotes?: string }): Promise<Payout> {
-    return this.updatePayoutStatus(id, {
-      status: PayoutStatus.COMPLETED,
-      transactionId: data.transactionId,
-      fees: data.fees || 0,
-      adminNotes: data.adminNotes,
-    });
-  }
-
-  async bulkProcessPayouts(payoutIds: string[], action: string): Promise<{ success: number; failed: number; errors: any[] }> {
-    const results = { success: 0, failed: 0, errors: [] };
+  async bulkProcessPayouts(payoutIds: string[], action: string, options?: { 
+    adminNotes?: string; 
+    reviewMessage?: string;
+    individualMessages?: { payoutId: string; reviewMessage: string }[];
+  }): Promise<{ 
+    success: number; 
+    failed: number; 
+    errors: any[];
+    successfulPayouts: { payoutId: string; agentCode: string; amount: number; message: string }[];
+    failedPayouts: { payoutId: string; error: string }[];
+  }> {
+    const results = { 
+      success: 0, 
+      failed: 0, 
+      errors: [],
+      successfulPayouts: [],
+      failedPayouts: [],
+    };
 
     for (const id of payoutIds) {
       try {
+        // Get payout details for response
+        const payout = await this.getPayoutById(id);
+        
         switch (action) {
           case 'approve':
-            await this.approvePayout(id);
+            await this.approvePayout(id, options?.adminNotes);
+            results.successfulPayouts.push({
+              payoutId: id,
+              agentCode: payout.agent?.agentCode || 'N/A',
+              amount: Number(payout.amount),
+              message: `Payout approved successfully`
+            });
             break;
-          case 'process':
-            await this.processPayout(id);
+          case 'review':
+            // Check for individual message first, then fall back to global message
+            let reviewMessage = options?.reviewMessage;
+            
+            if (options?.individualMessages) {
+              const individualMsg = options.individualMessages.find(msg => msg.payoutId === id);
+              if (individualMsg) {
+                reviewMessage = individualMsg.reviewMessage;
+              }
+            }
+            
+            if (!reviewMessage) {
+              throw new BadRequestException(`Review message required for payout ${id}`);
+            }
+            
+            await this.reviewPayout(id, reviewMessage, options?.adminNotes);
+            results.successfulPayouts.push({
+              payoutId: id,
+              agentCode: payout.agent?.agentCode || 'N/A',
+              amount: Number(payout.amount),
+              message: `Payout set to review: ${reviewMessage}`
+            });
             break;
           default:
-            throw new BadRequestException(`Unknown action: ${action}`);
+            throw new BadRequestException(`Unknown action: ${action}. Supported actions: approve, review`);
         }
         results.success++;
       } catch (error) {
         results.failed++;
         results.errors.push({ id, error: error.message });
+        results.failedPayouts.push({
+          payoutId: id,
+          error: error.message
+        });
       }
     }
 
@@ -1380,7 +1392,7 @@ export class AgentsService {
     const totalPayouts = await this.payoutsRepository
       .createQueryBuilder('payout')
       .select('SUM(payout.amount)', 'total')
-      .where('payout.status = :status', { status: PayoutStatus.COMPLETED })
+      .where('payout.status = :status', { status: PayoutStatus.APPROVED })
       .getRawOne();
 
     return {
@@ -1388,7 +1400,7 @@ export class AgentsService {
       activeAgents,
       totalEarnings: totalEarnings.total || 0,
       totalPayouts: totalPayouts.total || 0,
-      pendingPayouts: await this.payoutsRepository.count({ where: { status: PayoutStatus.REQUESTED } }),
+      pendingPayouts: await this.payoutsRepository.count({ where: { status: PayoutStatus.PENDING } }),
     };
   }
 
@@ -1471,14 +1483,11 @@ export class AgentsService {
   private async updateAgentBalancesOnPayoutStatusChange(payout: Payout, previousStatus: PayoutStatus): Promise<void> {
     const agent = payout.agent;
 
-    if (payout.status === PayoutStatus.COMPLETED && previousStatus !== PayoutStatus.COMPLETED) {
-      // Payout completed - remove from pending balance
+    if (payout.status === PayoutStatus.APPROVED && previousStatus !== PayoutStatus.APPROVED) {
+      // Payout approved - remove from pending balance (funds are now being processed externally)
       agent.pendingBalance -= payout.amount;
-    } else if (payout.status === PayoutStatus.REJECTED || payout.status === PayoutStatus.CANCELLED) {
-      // Payout rejected/cancelled - return to available balance
-      agent.pendingBalance -= payout.amount;
-      agent.availableBalance += payout.amount;
     }
+    // Note: REVIEW status doesn't change balances - funds remain in pending until approved
 
     await this.agentsRepository.save(agent);
   }
@@ -1664,14 +1673,9 @@ export class AgentsService {
   // Payout status transition validation
   private validatePayoutStatusTransition(currentStatus: PayoutStatus, newStatus: PayoutStatus): void {
     const validTransitions: Record<PayoutStatus, PayoutStatus[]> = {
-      [PayoutStatus.REQUESTED]: [PayoutStatus.PENDING_REVIEW, PayoutStatus.APPROVED, PayoutStatus.REJECTED, PayoutStatus.CANCELLED],
-      [PayoutStatus.PENDING_REVIEW]: [PayoutStatus.APPROVED, PayoutStatus.REJECTED, PayoutStatus.CANCELLED],
-      [PayoutStatus.APPROVED]: [PayoutStatus.PROCESSING, PayoutStatus.REJECTED, PayoutStatus.CANCELLED],
-      [PayoutStatus.PROCESSING]: [PayoutStatus.COMPLETED, PayoutStatus.FAILED],
-      [PayoutStatus.COMPLETED]: [], // Final state
-      [PayoutStatus.REJECTED]: [], // Final state
-      [PayoutStatus.CANCELLED]: [], // Final state
-      [PayoutStatus.FAILED]: [PayoutStatus.PROCESSING], // Can retry
+      [PayoutStatus.PENDING]: [PayoutStatus.APPROVED, PayoutStatus.REVIEW],
+      [PayoutStatus.REVIEW]: [PayoutStatus.APPROVED, PayoutStatus.PENDING],
+      [PayoutStatus.APPROVED]: [], // Final state - payout is processed externally
     };
 
     const allowedTransitions = validTransitions[currentStatus] || [];
@@ -1709,57 +1713,17 @@ export class AgentsService {
         }
         break;
 
-      case PayoutMethod.PAYPAL:
-        if (!paymentDetails.paypal?.email) {
-          throw new BadRequestException('PayPal email address required');
+      case PayoutMethod.PLANETTALK_CREDIT:
+        if (!paymentDetails.planettalkCredit) {
+          throw new BadRequestException('PlanetTalk credit details required');
         }
-        break;
-
-      case PayoutMethod.AIRTIME_TOPUP:
-        if (!paymentDetails.airtimeTopup) {
-          throw new BadRequestException('Airtime top-up details required');
-        }
-        const { phoneNumber } = paymentDetails.airtimeTopup;
-        if (!phoneNumber) {
-          throw new BadRequestException('Phone number required for airtime top-up');
+        const { planettalkMobile } = paymentDetails.planettalkCredit;
+        if (!planettalkMobile) {
+          throw new BadRequestException('PlanetTalk associated mobile number required');
         }
         // Validate phone number format
-        if (!this.isValidPhoneNumber(phoneNumber)) {
-          throw new BadRequestException('Invalid phone number format. Please include country code (e.g., +263771234567)');
-        }
-        break;
-
-      case PayoutMethod.MOBILE_MONEY:
-        if (!paymentDetails.mobileMoney) {
-          throw new BadRequestException('Mobile money details required');
-        }
-        const { phoneNumber: mmPhone, provider, accountName: mmAccountName } = paymentDetails.mobileMoney;
-        if (!mmPhone || !provider || !mmAccountName) {
-          throw new BadRequestException('Complete mobile money details required: phoneNumber, provider, accountName');
-        }
-        // Validate phone number format
-        if (!this.isValidPhoneNumber(mmPhone)) {
-          throw new BadRequestException('Invalid phone number format for mobile money. Please include country code (e.g., +263771234567)');
-        }
-        break;
-
-      case PayoutMethod.CRYPTO:
-        if (!paymentDetails.crypto?.address || !paymentDetails.crypto?.network) {
-          throw new BadRequestException('Crypto address and network required');
-        }
-        break;
-
-      case PayoutMethod.STRIPE:
-        // Stripe validation can be added here
-        break;
-
-      case PayoutMethod.CHECK:
-        // Check validation can be added here
-        break;
-
-      case PayoutMethod.OTHER:
-        if (!paymentDetails.other) {
-          throw new BadRequestException('Payment details required for other payout methods');
+        if (!this.isValidPhoneNumber(planettalkMobile)) {
+          throw new BadRequestException('Invalid mobile number format. Please include country code (e.g., +263771234567)');
         }
         break;
 
@@ -1788,27 +1752,12 @@ export class AgentsService {
         [PayoutStatus.APPROVED]: {
           title: 'Payout Approved',
           message: `Your payout request of $${payout.amount.toFixed(2)} has been approved and will be processed soon.`,
-          priority: NotificationPriority.MEDIUM,
-        },
-        [PayoutStatus.PROCESSING]: {
-          title: 'Payout Processing',
-          message: `Your payout of $${payout.amount.toFixed(2)} is currently being processed.`,
-          priority: NotificationPriority.MEDIUM,
-        },
-        [PayoutStatus.COMPLETED]: {
-          title: 'Payout Completed',
-          message: `Your payout of $${payout.amount.toFixed(2)} has been completed successfully.${payout.transactionId ? ` Transaction ID: ${payout.transactionId}` : ''}`,
           priority: NotificationPriority.HIGH,
         },
-        [PayoutStatus.REJECTED]: {
-          title: 'Payout Rejected',
-          message: `Your payout request of $${payout.amount.toFixed(2)} has been rejected.${payout.rejectionReason ? ` Reason: ${payout.rejectionReason}` : ''}`,
-          priority: NotificationPriority.HIGH,
-        },
-        [PayoutStatus.FAILED]: {
-          title: 'Payout Failed',
-          message: `Your payout of $${payout.amount.toFixed(2)} could not be processed. Please contact support.`,
-          priority: NotificationPriority.URGENT,
+        [PayoutStatus.REVIEW]: {
+          title: 'Payout Under Review',
+          message: `Your payout request of $${payout.amount.toFixed(2)} requires additional review.${payout.reviewMessage ? ` Message: ${payout.reviewMessage}` : ''}`,
+          priority: NotificationPriority.MEDIUM,
         },
       };
 
@@ -1830,13 +1779,16 @@ export class AgentsService {
           },
         });
 
-        // Send email notification for specific status changes
-        if (payout.status === PayoutStatus.APPROVED) {
-          try {
+        // Send email notification for all status changes
+        try {
+          if (payout.status === PayoutStatus.APPROVED) {
             await this.sendPayoutApprovedEmail(agent, payout);
-          } catch (error) {
-            console.error('Failed to send payout approval email:', error);
+          } else if (payout.status === PayoutStatus.REVIEW) {
+            // Send generic payout notification email for review
+            await this.sendPayoutStatusEmail(agent, payout);
           }
+        } catch (error) {
+          console.error(`Failed to send payout ${payout.status} email:`, error);
         }
       }
     } catch (error) {
@@ -2337,16 +2289,51 @@ export class AgentsService {
   }
 
   /**
+   * Send email notification for payout status changes (reject/review)
+   */
+  private async sendPayoutStatusEmail(agent: Agent, payout: Payout): Promise<void> {
+    const statusText = payout.status.charAt(0).toUpperCase() + payout.status.slice(1);
+    
+    const emailData = {
+      agentName: `${agent.user.firstName} ${agent.user.lastName}`,
+      payoutId: payout.id,
+      amount: payout.amount.toFixed(2),
+      status: statusText,
+      requestedDate: payout.requestedAt.toLocaleDateString('en-US', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      }),
+      reviewMessage: payout.reviewMessage,
+      adminNotes: payout.adminNotes,
+      paymentDetails: payout.paymentDetails,
+      dashboardUrl: process.env.NODE_ENV === 'production' 
+        ? 'https://portal.planettalk.com/en/dashboard'
+        : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard'),
+    };
+
+    const subjectMap = {
+      [PayoutStatus.REVIEW]: '🔍 Payout Under Review - PlanetTalk',
+    };
+
+    await this.emailService.sendEmail({
+      to: agent.user.email,
+      subject: subjectMap[payout.status] || `Payout Status Update - PlanetTalk`,
+      template: 'payout-notification',
+      templateData: emailData,
+    });
+
+    console.log(`Payout ${payout.status} email sent to ${agent.user.email} for payout ${payout.id}`);
+  }
+
+  /**
    * Format payment method for display
    */
   private formatPaymentMethod(method: PayoutMethod): string {
     const methodMap = {
       [PayoutMethod.BANK_TRANSFER]: 'Bank Transfer',
-      [PayoutMethod.PAYPAL]: 'PayPal',
-      [PayoutMethod.CRYPTO]: 'Cryptocurrency',
-      [PayoutMethod.AIRTIME_TOPUP]: 'Airtime Credit',
-      [PayoutMethod.MOBILE_MONEY]: 'Mobile Money',
-      [PayoutMethod.OTHER]: 'Other',
+      [PayoutMethod.PLANETTALK_CREDIT]: 'PlanetTalk Credit',
     };
     return methodMap[method] || 'Unknown';
   }
@@ -2356,14 +2343,45 @@ export class AgentsService {
    */
   private getProcessingTimeForMethod(method: PayoutMethod): string {
     const timeMap = {
-      [PayoutMethod.BANK_TRANSFER]: '2-5 business days',
-      [PayoutMethod.PAYPAL]: '1-2 business days',
-      [PayoutMethod.CRYPTO]: '1-24 hours',
-      [PayoutMethod.AIRTIME_TOPUP]: '1-4 hours',
-      [PayoutMethod.MOBILE_MONEY]: '1-2 business days',
-      [PayoutMethod.OTHER]: '3-7 business days',
+      [PayoutMethod.BANK_TRANSFER]: '2-3 business days',
+      [PayoutMethod.PLANETTALK_CREDIT]: '1-4 hours',
     };
-    return timeMap[method] || '3-7 business days';
+    return timeMap[method] || '2-3 business days';
+  }
+
+  /**
+   * Calculate monthly statistics for an agent
+   */
+  private async calculateAgentMonthlyStats(agentId: string): Promise<{ earningsThisMonth: number; referralsThisMonth: number }> {
+    // Get current month start and end dates
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Calculate earnings this month
+    const earningsResult = await this.earningsRepository
+      .createQueryBuilder('earning')
+      .select('SUM(earning.amount)', 'total')
+      .where('earning.agentId = :agentId', { agentId })
+      .andWhere('earning.earnedAt >= :startOfMonth', { startOfMonth })
+      .andWhere('earning.earnedAt <= :endOfMonth', { endOfMonth })
+      .andWhere('earning.status = :status', { status: 'confirmed' })
+      .getRawOne();
+
+    // Calculate referrals this month
+    const referralsResult = await this.referralUsageRepository
+      .createQueryBuilder('usage')
+      .leftJoin('usage.referralCode', 'code')
+      .where('code.agentId = :agentId', { agentId })
+      .andWhere('usage.usedAt >= :startOfMonth', { startOfMonth })
+      .andWhere('usage.usedAt <= :endOfMonth', { endOfMonth })
+      .andWhere('usage.status = :status', { status: 'confirmed' })
+      .getCount();
+
+    return {
+      earningsThisMonth: Number(earningsResult?.total || 0),
+      referralsThisMonth: referralsResult || 0,
+    };
   }
 
   /**
@@ -2375,21 +2393,10 @@ export class AgentsService {
 
     switch (method) {
       case PayoutMethod.BANK_TRANSFER:
-        businessDaysToAdd = 5;
+        businessDaysToAdd = 3;
         break;
-      case PayoutMethod.PAYPAL:
-        businessDaysToAdd = 2;
-        break;
-      case PayoutMethod.CRYPTO:
-        return 'Within 24 hours';
-      case PayoutMethod.AIRTIME_TOPUP:
+      case PayoutMethod.PLANETTALK_CREDIT:
         return 'Within 4 hours';
-      case PayoutMethod.MOBILE_MONEY:
-        businessDaysToAdd = 2;
-        break;
-      case PayoutMethod.OTHER:
-        businessDaysToAdd = 7;
-        break;
     }
 
     // Add business days (skip weekends)
@@ -2612,5 +2619,497 @@ export class AgentsService {
     result.batchInfo.processingTimeMs = Date.now() - startTime;
 
     return result;
+  }
+
+  /**
+   * Update agent earnings externally (individual)
+   */
+  async updateAgentEarnings(updateDto: UpdateAgentEarningsDto): Promise<{ success: boolean; newBalance: number; message: string }> {
+    const agent = await this.findById(updateDto.agentId);
+    
+    // Create an earning record for tracking
+    const earning = this.earningsRepository.create({
+      agentId: updateDto.agentId,
+      type: updateDto.amount >= 0 ? EarningType.BONUS : EarningType.ADJUSTMENT,
+      amount: updateDto.amount,
+      description: updateDto.description || `External earnings update: ${updateDto.amount >= 0 ? 'addition' : 'deduction'}`,
+      earnedAt: new Date(),
+      status: EarningStatus.CONFIRMED, // External updates are automatically confirmed
+      metadata: {
+        ...updateDto.metadata,
+        source: 'external_update',
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    await this.earningsRepository.save(earning);
+
+    // Update agent balances
+    agent.totalEarnings += updateDto.amount;
+    agent.availableBalance += updateDto.amount;
+    
+    // Ensure balances don't go negative
+    if (agent.availableBalance < 0) {
+      agent.availableBalance = 0;
+    }
+    if (agent.totalEarnings < 0) {
+      agent.totalEarnings = 0;
+    }
+
+    await this.agentsRepository.save(agent);
+
+    return {
+      success: true,
+      newBalance: agent.availableBalance,
+      message: `Agent earnings updated by $${updateDto.amount.toFixed(2)}`,
+    };
+  }
+
+  /**
+   * Update agent referrals externally (individual)
+   */
+  async updateAgentReferrals(updateDto: UpdateAgentReferralsDto): Promise<{ success: boolean; newTotal: number; message: string }> {
+    const agent = await this.findById(updateDto.agentId);
+    
+    // Update referral counts
+    agent.totalReferrals += updateDto.referralCount;
+    agent.activeReferrals += updateDto.referralCount;
+    
+    // Ensure counts don't go negative
+    if (agent.totalReferrals < 0) {
+      agent.totalReferrals = 0;
+    }
+    if (agent.activeReferrals < 0) {
+      agent.activeReferrals = 0;
+    }
+
+    // Add metadata about the update
+    agent.metadata = {
+      ...agent.metadata,
+      lastReferralUpdate: {
+        count: updateDto.referralCount,
+        description: updateDto.description,
+        updatedAt: new Date().toISOString(),
+        source: 'external_update',
+        ...updateDto.metadata,
+      },
+    };
+
+    await this.agentsRepository.save(agent);
+
+    return {
+      success: true,
+      newTotal: agent.totalReferrals,
+      message: `Agent referrals updated by ${updateDto.referralCount}`,
+    };
+  }
+
+  /**
+   * Bulk update agent earnings
+   */
+  async bulkUpdateEarnings(bulkDto: BulkUpdateEarningsDto): Promise<{ success: number; failed: number; errors: any[]; totalAmount: number }> {
+    const results = { success: 0, failed: 0, errors: [], totalAmount: 0 };
+
+    for (const update of bulkDto.updates) {
+      try {
+        const result = await this.updateAgentEarnings(update);
+        if (result.success) {
+          results.success++;
+          results.totalAmount += update.amount;
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ 
+          agentId: update.agentId, 
+          amount: update.amount,
+          error: error.message 
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Bulk update agent referrals
+   */
+  async bulkUpdateReferrals(bulkDto: BulkUpdateReferralsDto): Promise<{ success: number; failed: number; errors: any[]; totalReferrals: number }> {
+    const results = { success: 0, failed: 0, errors: [], totalReferrals: 0 };
+
+    for (const update of bulkDto.updates) {
+      try {
+        const result = await this.updateAgentReferrals(update);
+        if (result.success) {
+          results.success++;
+          results.totalReferrals += update.referralCount;
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ 
+          agentId: update.agentId, 
+          referralCount: update.referralCount,
+          error: error.message 
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Update agent stats (earnings and/or referrals) in a single request
+   */
+  async updateAgentStats(updateDto: UpdateAgentStatsDto): Promise<{ 
+    success: boolean; 
+    earningsUpdated: boolean;
+    referralsUpdated: boolean;
+    newBalance?: number; 
+    newReferralTotal?: number;
+    message: string;
+  }> {
+    const agent = await this.findById(updateDto.agentId);
+    let earningsUpdated = false;
+    let referralsUpdated = false;
+    let newBalance = agent.availableBalance;
+    let newReferralTotal = agent.totalReferrals;
+
+    // Update earnings if amount is provided
+    if (updateDto.amount !== undefined && updateDto.amount !== null) {
+      // Create an earning record for tracking
+      const earning = this.earningsRepository.create({
+        agentId: updateDto.agentId,
+        type: updateDto.amount >= 0 ? EarningType.BONUS : EarningType.ADJUSTMENT,
+        amount: updateDto.amount,
+        description: updateDto.description || `External stats update: earnings ${updateDto.amount >= 0 ? 'addition' : 'deduction'}`,
+        earnedAt: new Date(),
+        status: EarningStatus.CONFIRMED,
+        metadata: {
+          ...updateDto.metadata,
+          source: 'external_stats_update',
+          updatedAt: new Date().toISOString(),
+        },
+      });
+
+      await this.earningsRepository.save(earning);
+
+      // Update agent earnings
+      agent.totalEarnings += updateDto.amount;
+      agent.availableBalance += updateDto.amount;
+      
+      // Ensure balances don't go negative
+      if (agent.availableBalance < 0) {
+        agent.availableBalance = 0;
+      }
+      if (agent.totalEarnings < 0) {
+        agent.totalEarnings = 0;
+      }
+
+      newBalance = agent.availableBalance;
+      earningsUpdated = true;
+    }
+
+    // Update referrals if referralCount is provided
+    if (updateDto.referralCount !== undefined && updateDto.referralCount !== null) {
+      // Update referral counts
+      agent.totalReferrals += updateDto.referralCount;
+      agent.activeReferrals += updateDto.referralCount;
+      
+      // Ensure counts don't go negative
+      if (agent.totalReferrals < 0) {
+        agent.totalReferrals = 0;
+      }
+      if (agent.activeReferrals < 0) {
+        agent.activeReferrals = 0;
+      }
+
+      newReferralTotal = agent.totalReferrals;
+      referralsUpdated = true;
+    }
+
+    // Add metadata about the update
+    if (earningsUpdated || referralsUpdated) {
+      agent.metadata = {
+        ...agent.metadata,
+        lastStatsUpdate: {
+          earningsAmount: updateDto.amount,
+          referralCount: updateDto.referralCount,
+          description: updateDto.description,
+          updatedAt: new Date().toISOString(),
+          source: 'external_stats_update',
+          ...updateDto.metadata,
+        },
+      };
+
+      await this.agentsRepository.save(agent);
+    }
+
+    const updates = [];
+    if (earningsUpdated) updates.push(`earnings: $${updateDto.amount?.toFixed(2)}`);
+    if (referralsUpdated) updates.push(`referrals: ${updateDto.referralCount}`);
+
+    return {
+      success: true,
+      earningsUpdated,
+      referralsUpdated,
+      newBalance: earningsUpdated ? newBalance : undefined,
+      newReferralTotal: referralsUpdated ? newReferralTotal : undefined,
+      message: `Agent stats updated: ${updates.join(', ')}`,
+    };
+  }
+
+  /**
+   * Bulk update agent stats (earnings and/or referrals)
+   */
+  async bulkUpdateAgentStats(bulkDto: BulkUpdateAgentStatsDto): Promise<{ 
+    success: number; 
+    failed: number; 
+    errors: any[]; 
+    totalEarningsUpdated: number;
+    totalReferralsUpdated: number;
+  }> {
+    const results = { 
+      success: 0, 
+      failed: 0, 
+      errors: [], 
+      totalEarningsUpdated: 0,
+      totalReferralsUpdated: 0,
+    };
+
+    for (const update of bulkDto.updates) {
+      try {
+        const result = await this.updateAgentStats(update);
+        if (result.success) {
+          results.success++;
+          if (update.amount) {
+            results.totalEarningsUpdated += update.amount;
+          }
+          if (update.referralCount) {
+            results.totalReferralsUpdated += update.referralCount;
+          }
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ 
+          agentId: update.agentId, 
+          amount: update.amount,
+          referralCount: update.referralCount,
+          error: error.message 
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Update agent stats by agent code (earnings and/or referrals)
+   */
+  async updateAgentStatsByCode(updateDto: UpdateAgentStatsByCodeDto): Promise<{ 
+    success: boolean; 
+    agentId: string;
+    agentCode: string;
+    earningsUpdated: boolean;
+    referralsUpdated: boolean;
+    newBalance?: number; 
+    newReferralTotal?: number;
+    message: string;
+  }> {
+    // Find agent by code first
+    const agent = await this.findByAgentCode(updateDto.agentCode);
+    if (!agent) {
+      throw new NotFoundException(`Agent with code ${updateDto.agentCode} not found`);
+    }
+
+    // Convert to ID-based DTO and call existing method
+    const idBasedDto: UpdateAgentStatsDto = {
+      agentId: agent.id,
+      amount: updateDto.amount,
+      referralCount: updateDto.referralCount,
+      description: updateDto.description,
+      metadata: updateDto.metadata,
+    };
+
+    const result = await this.updateAgentStats(idBasedDto);
+
+    return {
+      ...result,
+      agentId: agent.id,
+      agentCode: agent.agentCode,
+    };
+  }
+
+  /**
+   * Bulk update agent stats by agent codes
+   */
+  async bulkUpdateAgentStatsByCode(bulkDto: BulkUpdateAgentStatsByCodeDto): Promise<{ 
+    success: number; 
+    failed: number; 
+    errors: any[]; 
+    totalEarningsUpdated: number;
+    totalReferralsUpdated: number;
+  }> {
+    const results = { 
+      success: 0, 
+      failed: 0, 
+      errors: [], 
+      totalEarningsUpdated: 0,
+      totalReferralsUpdated: 0,
+    };
+
+    for (const update of bulkDto.updates) {
+      try {
+        const result = await this.updateAgentStatsByCode(update);
+        if (result.success) {
+          results.success++;
+          if (update.amount) {
+            results.totalEarningsUpdated += update.amount;
+          }
+          if (update.referralCount) {
+            results.totalReferralsUpdated += update.referralCount;
+          }
+        }
+      } catch (error) {
+        results.failed++;
+        results.errors.push({ 
+          agentCode: update.agentCode,
+          amount: update.amount,
+          referralCount: update.referralCount,
+          error: error.message 
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Export payouts to CSV format
+   */
+  async exportPayouts(filters: {
+    page?: number;
+    limit?: number;
+    format?: string;
+    status?: string;
+    method?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{ csvContent?: string; data?: any[]; total: number }> {
+    const { status, method, startDate, endDate } = filters;
+    const page = filters.page || 1;
+    const limit = filters.limit || 20;
+    
+    const queryBuilder = this.payoutsRepository.createQueryBuilder('payout')
+      .leftJoinAndSelect('payout.agent', 'agent')
+      .leftJoinAndSelect('agent.user', 'user')
+      .leftJoinAndSelect('payout.processor', 'processor');
+
+    // Apply filters
+    if (status) {
+      queryBuilder.andWhere('payout.status = :status', { status });
+    }
+
+    if (method) {
+      queryBuilder.andWhere('payout.method = :method', { method });
+    }
+
+    if (startDate) {
+      queryBuilder.andWhere('payout.requestedAt >= :startDate', { startDate: new Date(startDate) });
+    }
+
+    if (endDate) {
+      queryBuilder.andWhere('payout.requestedAt <= :endDate', { endDate: new Date(endDate) });
+    }
+
+    const total = await queryBuilder.getCount();
+    const payouts = await queryBuilder
+      .orderBy('payout.requestedAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    if (filters.format === 'csv') {
+      const csvContent = this.generatePayoutCSV(payouts);
+      return { csvContent, total };
+    }
+
+    return { data: payouts, total };
+  }
+
+  /**
+   * Generate CSV content from payout data
+   */
+  private generatePayoutCSV(payouts: Payout[]): string {
+    const headers = [
+      'Payout ID',
+      'Agent Code',
+      'Agent Name',
+      'Agent Email',
+      'Status',
+      'Method',
+      'Amount',
+      'Net Amount',
+      'Fees',
+      'Currency',
+      'Description',
+      'Requested Date',
+      'Approved Date',
+      'Transaction ID',
+      'Payment Details',
+      'Admin Notes',
+      'Review Message'
+    ];
+
+    const rows = payouts.map(payout => [
+      payout.id,
+      payout.agent?.agentCode || 'N/A',
+      payout.agent?.user ? `${payout.agent.user.firstName} ${payout.agent.user.lastName}` : 'N/A',
+      payout.agent?.user?.email || 'N/A',
+      payout.status,
+      this.formatPaymentMethod(payout.method),
+      payout.amount.toString(),
+      payout.netAmount.toString(),
+      payout.fees.toString(),
+      payout.currency,
+      payout.description || '',
+      payout.requestedAt.toISOString(),
+      payout.approvedAt?.toISOString() || '',
+      payout.transactionId || '',
+      this.formatPaymentDetailsForCSV(payout.paymentDetails),
+      payout.adminNotes || '',
+      payout.reviewMessage || ''
+    ]);
+
+    // Escape CSV values and join
+    const escapeCsvValue = (value: string) => {
+      if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+
+    const csvRows = [headers, ...rows].map(row => 
+      row.map(cell => escapeCsvValue(cell.toString())).join(',')
+    );
+
+    return csvRows.join('\n');
+  }
+
+  /**
+   * Format payment details for CSV export
+   */
+  private formatPaymentDetailsForCSV(paymentDetails: any): string {
+    if (!paymentDetails) return '';
+
+    if (paymentDetails.bankAccount) {
+      const bank = paymentDetails.bankAccount;
+      return `Bank: ${bank.bankName} | Account: ****${bank.accountNumber?.slice(-4)} | Name: ${bank.accountName}`;
+    }
+
+    if (paymentDetails.planettalkCredit) {
+      const credit = paymentDetails.planettalkCredit;
+      return `PlanetTalk: ${credit.planettalkMobile} | Name: ${credit.accountName || 'N/A'}`;
+    }
+
+    return 'Unknown payment method';
   }
 }

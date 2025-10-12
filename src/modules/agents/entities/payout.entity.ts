@@ -12,25 +12,14 @@ import { Agent } from './agent.entity';
 import { User } from '../../users/entities/user.entity';
 
 export enum PayoutStatus {
-  REQUESTED = 'requested',
-  PENDING_REVIEW = 'pending_review',
+  PENDING = 'pending',
   APPROVED = 'approved',
-  PROCESSING = 'processing',
-  COMPLETED = 'completed',
-  REJECTED = 'rejected',
-  CANCELLED = 'cancelled',
-  FAILED = 'failed',
+  REVIEW = 'review',
 }
 
 export enum PayoutMethod {
   BANK_TRANSFER = 'bank_transfer',
-  PAYPAL = 'paypal',
-  STRIPE = 'stripe',
-  CHECK = 'check',
-  CRYPTO = 'crypto',
-  AIRTIME_TOPUP = 'airtime_topup',
-  MOBILE_MONEY = 'mobile_money',
-  OTHER = 'other',
+  PLANETTALK_CREDIT = 'planettalk_credit', // Replaces airtime_topup
 }
 
 @Entity('payouts')
@@ -45,7 +34,7 @@ export class Payout {
   @Column({
     type: 'enum',
     enum: PayoutStatus,
-    default: PayoutStatus.REQUESTED,
+    default: PayoutStatus.PENDING,
   })
   status: PayoutStatus;
 
@@ -79,24 +68,10 @@ export class Payout {
       accountName: string;
       bankName: string;
     };
-    paypal?: {
-      email: string;
-    };
-    crypto?: {
-      address: string;
-      network: string;
-    };
-    airtimeTopup?: {
-      phoneNumber: string;
+    planettalkCredit?: {
+      planettalkMobile: string; // PlanetTalk associated mobile number
       accountName?: string;
     };
-    mobileMoney?: {
-      phoneNumber: string;
-      provider: string;
-      accountName: string;
-      country: string;
-    };
-    other?: Record<string, any>;
   };
 
   @Column({ type: 'varchar', length: 100, nullable: true })
@@ -107,6 +82,9 @@ export class Payout {
 
   @Column({ type: 'text', nullable: true })
   rejectionReason: string;
+
+  @Column({ type: 'text', nullable: true })
+  reviewMessage: string; // Message when status is set to review
 
   @Column({ type: 'timestamp' })
   requestedAt: Date;
@@ -146,28 +124,33 @@ export class Payout {
 
   // Virtual fields
   get isPending(): boolean {
-    return [
-      PayoutStatus.REQUESTED,
-      PayoutStatus.PENDING_REVIEW,
-      PayoutStatus.APPROVED,
-      PayoutStatus.PROCESSING,
-    ].includes(this.status);
+    return this.status === PayoutStatus.PENDING;
   }
 
-  get isCompleted(): boolean {
-    return this.status === PayoutStatus.COMPLETED;
+  get isApproved(): boolean {
+    return this.status === PayoutStatus.APPROVED;
   }
 
-  get isFailed(): boolean {
-    return [
-      PayoutStatus.REJECTED,
-      PayoutStatus.CANCELLED,
-      PayoutStatus.FAILED,
-    ].includes(this.status);
+  get needsReview(): boolean {
+    return this.status === PayoutStatus.REVIEW;
+  }
+
+  // Removed isRejected method as REJECTED status is no longer supported
+
+  get canBeProcessed(): boolean {
+    return this.status === PayoutStatus.APPROVED;
+  }
+
+  get canBeApproved(): boolean {
+    return [PayoutStatus.PENDING, PayoutStatus.REVIEW].includes(this.status);
+  }
+
+  get canBeReviewed(): boolean {
+    return this.status === PayoutStatus.PENDING;
   }
 
   get processingTime(): number | null {
-    if (!this.requestedAt || !this.completedAt) return null;
-    return this.completedAt.getTime() - this.requestedAt.getTime();
+    if (!this.requestedAt || !this.approvedAt) return null;
+    return this.approvedAt.getTime() - this.requestedAt.getTime();
   }
 }

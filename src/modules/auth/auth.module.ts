@@ -12,13 +12,15 @@ import { LocalStrategy } from './strategies/local.strategy';
 import { User } from '../users/entities/user.entity';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
+import { AgentEarnings } from '../agents/entities/agent-earnings.entity';
+import { ReferralUsage } from '../agents/entities/referral-usage.entity';
 
 @Module({
   imports: [
     UsersModule,
     EmailModule,
     PassportModule,
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, AgentEarnings, ReferralUsage]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({

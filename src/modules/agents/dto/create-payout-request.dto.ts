@@ -45,24 +45,10 @@ export class CreatePayoutRequestDto {
       accountName: string;
       bankName: string;
     };
-    paypal?: {
-      email: string;
-    };
-    crypto?: {
-      address: string;
-      network: string;
-    };
-    airtimeTopup?: {
-      phoneNumber: string;
+    planettalkCredit?: {
+      planettalkMobile: string; // PlanetTalk associated mobile number
       accountName?: string;
     };
-    mobileMoney?: {
-      phoneNumber: string;
-      provider: string; // EcoCash, M-Pesa, Orange Money, etc.
-      accountName: string;
-      country: string;
-    };
-    other?: Record<string, any>;
   };
 
   @ApiPropertyOptional({ description: 'Additional metadata' })

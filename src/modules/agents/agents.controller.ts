@@ -5,7 +5,6 @@ import {
   Body,
   Patch,
   Param,
-  Delete,
   UseGuards,
   Query,
   Request,
@@ -111,12 +110,6 @@ export class AgentsController {
     return this.agentsService.getPayoutById(id);
   }
 
-  @Delete('payouts/:id')
-  @ApiOperation({ summary: 'Cancel payout request (if still pending)' })
-  @ApiResponse({ status: 200, description: 'Payout cancelled successfully' })
-  @ApiResponse({ status: 400, description: 'Cannot cancel payout in current status' })
-  @ApiResponse({ status: 404, description: 'Payout not found' })
-  cancelPayout(@Param('id') id: string) {
-    return this.agentsService.cancelPayout(id);
-  }
+  // Removed cancelPayout endpoint as payouts can no longer be cancelled
+  // Payouts can only be: PENDING, APPROVED, REJECTED, or REVIEW
 }

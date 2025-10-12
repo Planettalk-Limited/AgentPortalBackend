@@ -1,82 +1,140 @@
-<h2>Payout Status Update</h2>
-
-<p>Hello {{agentName}},</p>
-
-<p>We have an update regarding your payout request.</p>
-
-<div class="credentials-box">
-    <h3>Payout Details</h3>
-    <div class="credential-item">
-        <strong>Payout ID:</strong> {{payoutId}}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payout Status Update</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; text-align: center; padding: 30px 20px; border-radius: 12px 12px 0 0; margin: -20px -20px 0 -20px; }
+        .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
+        .header .subtitle { margin: 8px 0 0 0; opacity: 0.9; font-size: 16px; }
+        .content { background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .greeting { font-size: 18px; margin-bottom: 20px; }
+        .status-card { border-radius: 12px; padding: 25px; text-align: center; margin: 25px 0; }
+        .status-approved { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 2px solid #16a34a; }
+        .status-review { background: linear-gradient(135deg, #fefbf2, #fef3c7); border: 2px solid #f59e0b; }
+        .amount { font-size: 36px; font-weight: bold; margin-bottom: 15px; }
+        .amount-approved { color: #15803d; }
+        .amount-review { color: #d97706; }
+        .status-badge { padding: 10px 20px; border-radius: 25px; font-weight: 600; font-size: 14px; text-transform: uppercase; }
+        .badge-approved { background: #16a34a; color: white; }
+        .badge-review { background: #f59e0b; color: white; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 25px 0; }
+        .detail-item { background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #00bcd4; }
+        .detail-label { font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 5px; }
+        .detail-value { font-size: 16px; color: #1e293b; font-weight: 500; }
+        .message-card { border-radius: 12px; padding: 20px; margin: 25px 0; }
+        .message-approved { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border-left: 4px solid #16a34a; }
+        .message-review { background: linear-gradient(135deg, #fefbf2, #fef3c7); border-left: 4px solid #f59e0b; }
+        .review-message { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 8px; padding: 15px; margin: 15px 0; font-style: italic; }
+        .payment-card { background: linear-gradient(135deg, #eff6ff, #dbeafe); border: 2px solid #3b82f6; border-radius: 12px; padding: 20px; margin: 25px 0; }
+        .button { display: inline-block; background: linear-gradient(135deg, #00bcd4, #0891b2); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; text-align: center; margin: 25px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .footer { text-align: center; margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #64748b; }
+        @media (max-width: 480px) { .details-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📢 Payout Status Update</h1>
+        <div class="subtitle">Important update about your payout</div>
     </div>
-    <div class="credential-item">
-        <strong>Amount:</strong> ${{amount}}
+    
+    <div class="content">
+        <div class="greeting">Hello <strong>{{agentName}}</strong>,</div>
+        
+        <p>We have an important update regarding your payout request.</p>
+
+        {{#if (eq status 'approved')}}
+        <div class="status-card status-approved">
+            <div class="amount amount-approved">${{amount}}</div>
+            <span class="status-badge badge-approved">✅ Approved</span>
+        </div>
+        {{/if}}
+
+        {{#if (eq status 'review')}}
+        <div class="status-card status-review">
+            <div class="amount amount-review">${{amount}}</div>
+            <span class="status-badge badge-review">🔍 Under Review</span>
+        </div>
+        {{/if}}
+
+        <div class="details-grid">
+            <div class="detail-item">
+                <div class="detail-label">Payout ID</div>
+                <div class="detail-value">{{payoutId}}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Current Status</div>
+                <div class="detail-value">{{status}}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Amount</div>
+                <div class="detail-value">${{amount}}</div>
+            </div>
+            <div class="detail-item">
+                <div class="detail-label">Requested</div>
+                <div class="detail-value">{{requestedDate}}</div>
+            </div>
+        </div>
+
+        {{#if (eq status 'approved')}}
+        <div class="message-card message-approved">
+            <strong>🎉 Excellent News!</strong><br>
+            Your payout request has been approved by our finance team and will be processed within 2-3 business days. Funds will be sent to your designated payment method.
+        </div>
+        {{/if}}
+
+        {{#if (eq status 'review')}}
+        <div class="message-card message-review">
+            <strong>🔍 Additional Review Required</strong><br>
+            Your payout request requires additional review before we can proceed with approval.
+            {{#if reviewMessage}}
+            <div class="review-message">
+                <strong>📝 Review Details:</strong><br>
+                {{reviewMessage}}
+            </div>
+            {{/if}}
+            <p style="margin-top: 15px;">Our team will review your request and get back to you as soon as possible. No action is required from your side at this time.</p>
+        </div>
+        {{/if}}
+
+        {{#if paymentDetails}}
+        <div class="payment-card">
+            <strong>💳 Payment Destination:</strong><br><br>
+            {{#if paymentDetails.bankAccount}}
+            <div style="display: flex; align-items: center; gap: 10px;">
+                🏦 <strong>Bank Transfer</strong><br>
+                Account ending in ****{{paymentDetails.bankAccount.accountNumber}}<br>
+                {{paymentDetails.bankAccount.bankName}}
+            </div>
+            {{/if}}
+            {{#if paymentDetails.planettalkCredit}}
+            <div style="display: flex; align-items: center; gap: 10px;">
+                📱 <strong>PlanetTalk Credit</strong><br>
+                {{paymentDetails.planettalkCredit.planettalkMobile}}<br>
+                {{#if paymentDetails.planettalkCredit.accountName}}{{paymentDetails.planettalkCredit.accountName}}{{/if}}
+            </div>
+            {{/if}}
+        </div>
+        {{/if}}
+
+        <div style="text-align: center;">
+            <a href="{{dashboardUrl}}" class="button">📊 View Dashboard</a>
+        </div>
+
+        {{#if adminNotes}}
+        <div class="detail-item" style="background: #f1f5f9; border-left-color: #64748b; margin: 25px 0;">
+            <div class="detail-label">Admin Notes</div>
+            <div class="detail-value">{{adminNotes}}</div>
+        </div>
+        {{/if}}
+        
+        <div class="footer">
+            <p>You can view all your payout history and current balance in your agent dashboard.</p>
+            <p><strong>Thank you for being part of the PlanetTalk community!</strong></p>
+            <p>Best regards,<br><strong>The PlanetTalk Finance Team</strong> 💙</p>
+        </div>
     </div>
-    <div class="credential-item">
-        <strong>Status:</strong> {{status}}
-    </div>
-    <div class="credential-item">
-        <strong>Requested:</strong> {{requestedDate}}
-    </div>
-    {{#if processedDate}}
-    <div class="credential-item">
-        <strong>Processed:</strong> {{processedDate}}
-    </div>
-    {{/if}}
-</div>
-
-{{#if (eq status 'approved')}}
-<div class="info-box success">
-    <strong>Great News!</strong> Your payout request has been approved and is being processed. You should receive your funds within {{processingTime}}.
-</div>
-{{/if}}
-
-{{#if (eq status 'completed')}}
-<div class="info-box success">
-    <strong>Payout Completed!</strong> Your payout of ${{amount}} has been successfully processed.
-    {{#if transactionId}}
-    <br><strong>Transaction ID:</strong> {{transactionId}}
-    {{/if}}
-</div>
-{{/if}}
-
-{{#if (eq status 'rejected')}}
-<div class="info-box danger">
-    <strong>Payout Rejected</strong>
-    {{#if rejectionReason}}
-    <br><strong>Reason:</strong> {{rejectionReason}}
-    {{/if}}
-</div>
-<p>If you have questions about this decision, please contact our support team.</p>
-{{/if}}
-
-{{#if fees}}
-<div class="info-box">
-    <strong>Processing Details:</strong><br>
-    Gross Amount: ${{amount}}<br>
-    Processing Fee: ${{fees}}<br>
-    <strong>Net Amount: ${{netAmount}}</strong>
-</div>
-{{/if}}
-
-{{#if (eq status 'completed')}}
-<h3>Payment Method: {{paymentMethod}}</h3>
-{{#if paymentDetails}}
-<p>Funds have been sent to your registered {{paymentMethod}} account.</p>
-{{/if}}
-{{/if}}
-
-<a href="{{dashboardUrl}}" class="button">View Dashboard</a>
-
-{{#if adminNotes}}
-<div class="info-box">
-    <strong>Admin Notes:</strong><br>
-    {{adminNotes}}
-</div>
-{{/if}}
-
-<p>You can view all your payout history and current balance in your agent dashboard.</p>
-
-<p>Thank you for being part of the PlanetTalk community and helping families stay connected!</p>
-
-<p>Best regards,<br><strong>The PlanetTalk Finance Team</strong></p>
+</body>
+</html>
