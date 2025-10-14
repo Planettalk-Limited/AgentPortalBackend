@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as crypto from 'crypto';
+import * as bcrypt from 'bcryptjs';
 import { Agent, AgentStatus, AgentTier } from './entities/agent.entity';
 import { AgentApplication } from './entities/agent-application.entity';
 import { ReferralCode, ReferralCodeType } from './entities/referral-code.entity';
@@ -49,9 +50,100 @@ export class AgentsService {
     // Generate unique agent code
     const agentCode = await this.generateAgentCode();
     
+    let userId = createAgentDto.userId;
+    
+    // If no userId provided, create a user automatically
+    if (!userId) {
+      // Check for existing email
+      const existingUserByEmail = await this.usersRepository.findOne({
+        where: { email: createAgentDto.email }
+      });
+      
+      if (existingUserByEmail) {
+        throw new BadRequestException(`User with email ${createAgentDto.email} already exists`);
+      }
+      
+      // Generate username from email and ensure uniqueness
+      let username = createAgentDto.email.split('@')[0].toLowerCase();
+      const existingUserByUsername = await this.usersRepository.findOne({
+        where: { username }
+      });
+      
+      if (existingUserByUsername) {
+        // Add timestamp to make username unique
+        username = `${username}_${Date.now()}`;
+      }
+      
+      // Check for existing phone number if provided
+      if (createAgentDto.phone) {
+        const existingUserByPhone = await this.usersRepository.findOne({
+          where: { phoneNumber: createAgentDto.phone }
+        });
+        
+        if (existingUserByPhone) {
+          throw new BadRequestException(`User with phone number ${createAgentDto.phone} already exists`);
+        }
+      }
+      
+      // Generate temporary password
+      const tempPassword = this.generateTemporaryPassword();
+      
+      const newUser = this.usersRepository.create({
+        firstName: createAgentDto.firstName,
+        lastName: createAgentDto.lastName,
+        email: createAgentDto.email,
+        username: username,
+        passwordHash: await this.hashPassword(tempPassword),
+        role: 'agent' as any,
+        status: 'active' as any,
+        phoneNumber: createAgentDto.phone,
+        country: createAgentDto.country,
+        emailVerifiedAt: new Date(), // Auto-verify email since admin created
+        isFirstLogin: false, // Skip first login flow
+        metadata: {
+          createdByAdmin: true,
+          adminVerified: true, // Mark as admin verified
+          emailVerifiedByAdmin: true,
+          tempPassword: tempPassword, // Store temp password for admin reference
+          createdAt: new Date().toISOString(),
+          verifiedAt: new Date().toISOString(),
+        },
+      });
+      
+      const savedUser = await this.usersRepository.save(newUser);
+      userId = savedUser.id;
+    } else {
+      // If userId is provided, check if user already has an agent
+      const existingAgent = await this.agentsRepository.findOne({
+        where: { userId: createAgentDto.userId }
+      });
+      
+      if (existingAgent) {
+        throw new BadRequestException(`User already has an agent account with code ${existingAgent.agentCode}`);
+      }
+    }
+    
     const agent = this.agentsRepository.create({
-      ...createAgentDto,
       agentCode,
+      status: createAgentDto.status || AgentStatus.ACTIVE, // Auto-activate for admin created agents
+      tier: AgentTier.BRONZE,
+      totalEarnings: 0,
+      availableBalance: 0,
+      pendingBalance: 0,
+      totalReferrals: 0,
+      activeReferrals: 0,
+      commissionRate: createAgentDto.commissionRate || 10.0,
+      notes: createAgentDto.notes,
+      userId: userId,
+      activatedAt: new Date(), // Auto-activate since admin created
+      lastActivityAt: new Date(),
+      metadata: {
+        createdByAdmin: true,
+        adminVerified: true, // Mark as admin verified
+        autoActivated: true, // Bypassed normal application process
+        createdAt: new Date().toISOString(),
+        verifiedAt: new Date().toISOString(),
+      },
     });
 
     return this.agentsRepository.save(agent);
@@ -228,7 +320,7 @@ export class AgentsService {
     // Add monthly statistics as additional properties to the agent object
     (agent as any).earningsThisMonth = monthlyStats.earningsThisMonth;
     (agent as any).referralsThisMonth = monthlyStats.referralsThisMonth;
-    
+
     return agent;
   }
 
@@ -1780,14 +1872,14 @@ export class AgentsService {
         });
 
         // Send email notification for all status changes
-        try {
+          try {
           if (payout.status === PayoutStatus.APPROVED) {
             await this.sendPayoutApprovedEmail(agent, payout);
           } else if (payout.status === PayoutStatus.REVIEW) {
             // Send generic payout notification email for review
             await this.sendPayoutStatusEmail(agent, payout);
           }
-        } catch (error) {
+          } catch (error) {
           console.error(`Failed to send payout ${payout.status} email:`, error);
         }
       }
@@ -3111,5 +3203,25 @@ export class AgentsService {
     }
 
     return 'Unknown payment method';
+  }
+
+  /**
+   * Generate temporary password for admin-created agents
+   */
+  private generateTemporaryPassword(): string {
+    const chars = 'ABCDEFGHJKMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+    let password = '';
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  }
+
+  /**
+   * Hash password using bcrypt
+   */
+  private async hashPassword(password: string): Promise<string> {
+    const saltRounds = 10;
+    return bcrypt.hash(password, saltRounds);
   }
 }
