@@ -12,6 +12,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AgentsService } from './agents.service';
 import { CreateEarningAdjustmentDto } from './dto/create-earning-adjustment.dto';
 import { BulkEarningsUploadDto, BulkEarningsUploadResultDto } from './dto/bulk-earnings-upload.dto';
+import { BulkEarningsDataUploadDto, BulkEarningsDataUploadResultDto } from './dto/earnings-data-upload.dto';
 
 @ApiTags('Admin - Earnings Management')
 @ApiBearerAuth()
@@ -158,5 +159,25 @@ export class AdminEarningsController {
     @Body() bulkUploadDto: BulkEarningsUploadDto
   ): Promise<BulkEarningsUploadResultDto> {
     return this.agentsService.bulkUploadEarnings(bulkUploadDto);
+  }
+
+  @Post('bulk-upload-data')
+  @ApiOperation({ 
+    summary: 'Bulk upload earnings data for multiple agents (Admin only)',
+    description: 'Upload comprehensive earnings data including total earnings, monthly earnings, referrals, and payout amounts for multiple agents using their agent codes.'
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'Bulk earnings data upload completed successfully',
+    type: BulkEarningsDataUploadResultDto
+  })
+  @ApiResponse({ 
+    status: 400, 
+    description: 'Invalid request data or validation errors'
+  })
+  bulkUploadEarningsData(
+    @Body() bulkDataUploadDto: BulkEarningsDataUploadDto
+  ): Promise<BulkEarningsDataUploadResultDto> {
+    return this.agentsService.bulkUploadEarningsData(bulkDataUploadDto);
   }
 }

@@ -40,10 +40,14 @@ export class CreatePayoutRequestDto {
   @IsObject()
   paymentDetails: {
     bankAccount?: {
-      accountNumber: string;
-      routingNumber: string;
-      accountName: string;
       bankName: string;
+      branchNameOrCode?: string;
+      accountName: string;
+      accountNumberOrIban: string;
+      swiftBicCode?: string;
+      currency: string;
+      bankCountry: string;
+      additionalNotes?: string;
     };
     planettalkCredit?: {
       planettalkMobile: string; // PlanetTalk associated mobile number

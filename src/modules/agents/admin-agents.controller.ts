@@ -218,4 +218,26 @@ export class AdminAgentsController {
     return this.agentsService.bulkUpdateAgentStatsByCode(bulkDto);
   }
 
+  // Balance Recalculation Endpoints
+  @Post(':id/recalculate-balances')
+  @ApiOperation({ 
+    summary: 'Recalculate agent balances from database records (Admin)',
+    description: 'Fixes any discrepancies in agent balances by recalculating from actual earnings and payouts in the database'
+  })
+  @ApiResponse({ status: 200, description: 'Balances recalculated successfully' })
+  @ApiResponse({ status: 404, description: 'Agent not found' })
+  recalculateAgentBalances(@Param('id') id: string) {
+    return this.agentsService.recalculateAgentBalances(id);
+  }
+
+  @Post('recalculate-all-balances')
+  @ApiOperation({ 
+    summary: 'Recalculate balances for all agents (Admin)',
+    description: 'Recalculates balances for all agents in the system. Use this to fix balance discrepancies across the platform.'
+  })
+  @ApiResponse({ status: 200, description: 'All balances recalculated successfully' })
+  recalculateAllAgentBalances() {
+    return this.agentsService.recalculateAllAgentBalances();
+  }
+
 }

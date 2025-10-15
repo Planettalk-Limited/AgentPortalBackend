@@ -406,6 +406,11 @@ export class AuthService {
     const resetTokenExpiry = new Date();
     resetTokenExpiry.setHours(resetTokenExpiry.getHours() + 1); // 1 hour expiry
 
+    console.log('🔑 Generated reset token for user:', user.email);
+    console.log('  - Token:', resetToken);
+    console.log('  - Token length:', resetToken.length);
+    console.log('  - Expiry:', resetTokenExpiry.toISOString());
+
     // Save reset token to user (you'll need to add these fields to User entity)
     await this.usersService.update(user.id, {
       metadata: {
@@ -414,6 +419,8 @@ export class AuthService {
         resetTokenExpiry: resetTokenExpiry.toISOString(),
       },
     });
+    
+    console.log('✅ Reset token saved to database');
 
     // Send password reset email via Mailgun
     const resetUrl = process.env.NODE_ENV === 'production' 
@@ -454,7 +461,27 @@ export class AuthService {
 
   async resetPassword(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
     // Find user by reset token
+    console.log('🔍 Reset password requested with token:', token);
+    console.log('🔍 Token length:', token.length);
+    console.log('🔍 Token trimmed:', token.trim());
+    
     const users = await this.usersService.findAll();
+    console.log('🔍 Total users found:', users.length);
+    
+    // Debug: Check all users with reset tokens
+    const usersWithTokens = users.filter(u => u.metadata?.resetToken);
+    console.log('🔍 Users with reset tokens:', usersWithTokens.length);
+    
+    usersWithTokens.forEach(u => {
+      console.log('🔍 User:', u.email);
+      console.log('  - Stored token:', u.metadata?.resetToken);
+      console.log('  - Token matches:', u.metadata?.resetToken === token);
+      console.log('  - Token matches (trimmed):', u.metadata?.resetToken === token.trim());
+      console.log('  - Token expiry:', u.metadata?.resetTokenExpiry);
+      console.log('  - Is expired:', new Date(u.metadata?.resetTokenExpiry) <= new Date());
+      console.log('  - Current time:', new Date());
+    });
+    
     const user = users.find(u => 
       u.metadata?.resetToken === token && 
       u.metadata?.resetTokenExpiry && 
@@ -462,8 +489,11 @@ export class AuthService {
     );
 
     if (!user) {
+      console.log('❌ No matching user found');
       throw new BadRequestException('Invalid or expired reset token');
     }
+    
+    console.log('✅ User found:', user.email);
 
     // Hash new password
     const saltRounds = parseInt(this.configService.get('BCRYPT_ROUNDS', '10'));

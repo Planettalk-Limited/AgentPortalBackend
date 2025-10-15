@@ -29,7 +29,7 @@ Only **2 payment methods** are supported:
 
 | Method | Code | Description | Required Fields |
 |--------|------|-------------|----------------|
-| Bank Transfer | `bank_transfer` | Traditional bank transfer | `accountNumber`, `routingNumber`, `accountName`, `bankName` |
+| Bank Transfer | `bank_transfer` | Traditional bank transfer | `bankName`, `accountName`, `accountNumberOrIban`, `currency`, `bankCountry` |
 | PlanetTalk Credit | `planettalk_credit` | Airtime/credit to PlanetTalk mobile number | `planettalkMobile`, `accountName` (optional) |
 
 ## Agent Endpoints
@@ -47,10 +47,14 @@ Create a new payout request for an agent.
   "description": "Monthly commission payout",
   "paymentDetails": {
     "bankAccount": {
-      "accountNumber": "1234567890",
-      "routingNumber": "123456789",
+      "bankName": "Standard Bank",
+      "branchNameOrCode": "Main Branch / 001234",
       "accountName": "John Doe",
-      "bankName": "Chase Bank"
+      "accountNumberOrIban": "1234567890",
+      "swiftBicCode": "SBZAZAJJ",
+      "currency": "USD",
+      "bankCountry": "United States",
+      "additionalNotes": "Savings account"
     }
   },
   "metadata": {

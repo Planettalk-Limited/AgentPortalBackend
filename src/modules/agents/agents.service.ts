@@ -868,8 +868,7 @@ export class AgentsService {
       loginUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'support@planettalk.com',
-      supportPhone: '+1-800-PLANET-TALK',
+      supportEmail: 'agent@planettalk.com',
     };
 
     await this.emailService.sendEmail({
@@ -1799,9 +1798,29 @@ export class AgentsService {
         if (!paymentDetails.bankAccount) {
           throw new BadRequestException('Bank account details required for bank transfer');
         }
-        const { accountNumber, routingNumber, accountName: bankAccountName, bankName } = paymentDetails.bankAccount;
-        if (!accountNumber || !routingNumber || !bankAccountName || !bankName) {
-          throw new BadRequestException('Complete bank account details required: accountNumber, routingNumber, accountName, bankName');
+        const { 
+          bankName, 
+          accountName: bankAccountName, 
+          accountNumberOrIban, 
+          currency, 
+          bankCountry 
+        } = paymentDetails.bankAccount;
+        
+        // Validate mandatory fields
+        if (!bankName) {
+          throw new BadRequestException('Bank name is required');
+        }
+        if (!bankAccountName) {
+          throw new BadRequestException('Account name is required (must match Agent registration name)');
+        }
+        if (!accountNumberOrIban) {
+          throw new BadRequestException('Account number or IBAN is required');
+        }
+        if (!currency) {
+          throw new BadRequestException('Account currency is required');
+        }
+        if (!bankCountry) {
+          throw new BadRequestException('Bank country is required');
         }
         break;
 
@@ -2197,10 +2216,8 @@ export class AgentsService {
 
     await this.earningsRepository.save(earning);
 
-    // Update agent balance and total earnings
-    earning.agent.availableBalance = parseFloat(earning.agent.availableBalance.toString()) + parseFloat(earning.amount.toString());
-    earning.agent.totalEarnings = parseFloat(earning.agent.totalEarnings.toString()) + parseFloat(earning.amount.toString());
-    await this.agentsRepository.save(earning.agent);
+    // Recalculate agent balances from database to ensure accuracy
+    await this.recalculateAgentBalances(earning.agent.id);
 
     return {
       success: true,
@@ -2308,17 +2325,15 @@ export class AgentsService {
       amount: payout.amount.toFixed(2),
       paymentMethod: this.formatPaymentMethod(payout.method),
       requestDate: payout.requestedAt.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
+        month: 'short',
         day: 'numeric',
+        year: 'numeric',
       }),
       description: payout.description || 'Agent commission payout',
       agentPortalUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'support@planettalk.com',
-      supportPhone: '+1-800-PLANET-TALK',
+      supportEmail: 'agent@planettalk.com',
     };
 
     await this.emailService.sendEmail({
@@ -2353,10 +2368,9 @@ export class AgentsService {
         year: 'numeric',
       }),
       approvalDate: (payout.approvedAt || new Date()).toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
+        month: 'short',
         day: 'numeric',
+        year: 'numeric',
       }),
       processingTime,
       estimatedArrival,
@@ -2366,8 +2380,7 @@ export class AgentsService {
       agentPortalUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'support@planettalk.com',
-      supportPhone: '+1-800-PLANET-TALK',
+      supportEmail: 'agent@planettalk.com',
     };
 
     await this.emailService.sendEmail({
@@ -2392,17 +2405,16 @@ export class AgentsService {
       amount: payout.amount.toFixed(2),
       status: statusText,
       requestedDate: payout.requestedAt.toLocaleDateString('en-US', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
+        month: 'short',
         day: 'numeric',
+        year: 'numeric',
       }),
       reviewMessage: payout.reviewMessage,
       adminNotes: payout.adminNotes,
       paymentDetails: payout.paymentDetails,
-      dashboardUrl: process.env.NODE_ENV === 'production' 
-        ? 'https://portal.planettalk.com/en/dashboard'
-        : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard'),
+      agentPortalUrl: process.env.NODE_ENV === 'production' 
+        ? 'https://portal.planettalk.com/en'
+        : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
     };
 
     const subjectMap = {
@@ -2508,6 +2520,153 @@ export class AgentsService {
       day: 'numeric',
       year: 'numeric',
     });
+  }
+
+  /**
+   * Recalculate agent balances based on actual database records
+   * This fixes any discrepancies in balances
+   */
+  async recalculateAgentBalances(agentId: string): Promise<{
+    success: boolean;
+    agentCode: string;
+    balances: {
+      previous: {
+        totalEarnings: number;
+        availableBalance: number;
+        pendingBalance: number;
+      };
+      calculated: {
+        totalEarnings: number;
+        availableBalance: number;
+        pendingBalance: number;
+      };
+      corrected: boolean;
+    };
+    message: string;
+  }> {
+    const agent = await this.agentsRepository.findOne({
+      where: { id: agentId },
+      relations: ['user'],
+    });
+
+    if (!agent) {
+      throw new NotFoundException(`Agent not found`);
+    }
+
+    // Store previous balances
+    const previousBalances = {
+      totalEarnings: Number(agent.totalEarnings),
+      availableBalance: Number(agent.availableBalance),
+      pendingBalance: Number(agent.pendingBalance),
+    };
+
+    // Calculate correct balances from database
+    // 1. Total confirmed earnings
+    const confirmedEarnings = await this.earningsRepository
+      .createQueryBuilder('earning')
+      .where('earning.agentId = :agentId', { agentId })
+      .andWhere('earning.status = :status', { status: EarningStatus.CONFIRMED })
+      .select('COALESCE(SUM(earning.amount), 0)', 'total')
+      .getRawOne();
+
+    const totalConfirmedEarnings = Number(confirmedEarnings.total) || 0;
+
+    // 2. Total pending earnings
+    const pendingEarnings = await this.earningsRepository
+      .createQueryBuilder('earning')
+      .where('earning.agentId = :agentId', { agentId })
+      .andWhere('earning.status = :status', { status: EarningStatus.PENDING })
+      .select('COALESCE(SUM(earning.amount), 0)', 'total')
+      .getRawOne();
+
+    const totalPendingEarnings = Number(pendingEarnings.total) || 0;
+
+    // 3. Total approved payouts (these have been deducted from available balance)
+    const approvedPayouts = await this.payoutsRepository
+      .createQueryBuilder('payout')
+      .where('payout.agentId = :agentId', { agentId })
+      .andWhere('payout.status = :status', { status: PayoutStatus.APPROVED })
+      .select('COALESCE(SUM(payout.amount), 0)', 'total')
+      .getRawOne();
+
+    const totalApprovedPayouts = Number(approvedPayouts.total) || 0;
+
+    // Calculate correct balances
+    const calculatedBalances = {
+      totalEarnings: totalConfirmedEarnings,
+      availableBalance: totalConfirmedEarnings - totalApprovedPayouts,
+      pendingBalance: totalPendingEarnings,
+    };
+
+    // Check if correction is needed
+    const needsCorrection = 
+      Math.abs(previousBalances.totalEarnings - calculatedBalances.totalEarnings) > 0.01 ||
+      Math.abs(previousBalances.availableBalance - calculatedBalances.availableBalance) > 0.01 ||
+      Math.abs(previousBalances.pendingBalance - calculatedBalances.pendingBalance) > 0.01;
+
+    if (needsCorrection) {
+      // Update agent with correct balances
+      agent.totalEarnings = calculatedBalances.totalEarnings;
+      agent.availableBalance = calculatedBalances.availableBalance;
+      agent.pendingBalance = calculatedBalances.pendingBalance;
+      
+      await this.agentsRepository.save(agent);
+
+      console.log(`Fixed balances for agent ${agent.agentCode}:`, {
+        previous: previousBalances,
+        calculated: calculatedBalances,
+      });
+    }
+
+    return {
+      success: true,
+      agentCode: agent.agentCode,
+      balances: {
+        previous: previousBalances,
+        calculated: calculatedBalances,
+        corrected: needsCorrection,
+      },
+      message: needsCorrection 
+        ? `Balances corrected for agent ${agent.agentCode}`
+        : `Balances are already correct for agent ${agent.agentCode}`,
+    };
+  }
+
+  /**
+   * Recalculate balances for all agents
+   */
+  async recalculateAllAgentBalances(): Promise<{
+    success: boolean;
+    totalAgents: number;
+    corrected: number;
+    details: any[];
+  }> {
+    const agents = await this.agentsRepository.find();
+    
+    const results = {
+      success: true,
+      totalAgents: agents.length,
+      corrected: 0,
+      details: [],
+    };
+
+    for (const agent of agents) {
+      try {
+        const result = await this.recalculateAgentBalances(agent.id);
+        if (result.balances.corrected) {
+          results.corrected++;
+        }
+        results.details.push(result);
+      } catch (error) {
+        console.error(`Error recalculating balances for agent ${agent.agentCode}:`, error);
+        results.details.push({
+          agentCode: agent.agentCode,
+          error: error.message,
+        });
+      }
+    }
+
+    return results;
   }
 
   /**
@@ -2630,6 +2789,7 @@ export class AgentsService {
             referenceId: earningEntry.referenceId,
             earnedAt: earningEntry.earnedAt ? new Date(earningEntry.earnedAt) : new Date(),
             status: bulkUploadDto.autoConfirm ? EarningStatus.CONFIRMED : EarningStatus.PENDING,
+            confirmedAt: bulkUploadDto.autoConfirm ? new Date() : null,
             metadata: {
               batchId,
               batchDescription: bulkUploadDto.batchDescription,
@@ -2671,18 +2831,16 @@ export class AgentsService {
         }
       }
 
-      // Third pass: update agent balances if auto-confirm is enabled
+      // Third pass: recalculate balances for affected agents if auto-confirm is enabled
       if (bulkUploadDto.autoConfirm && agentBalanceUpdates.size > 0) {
         for (const [agentId, update] of agentBalanceUpdates) {
           try {
-            const agent = update.agent;
-            agent.totalEarnings += update.totalEarnings;
-            agent.availableBalance += update.totalEarnings;
-            
-            await this.agentsRepository.save(agent);
-            result.updatedAgents.push(agent.agentCode);
+            // Recalculate balances from database to ensure accuracy
+            const recalcResult = await this.recalculateAgentBalances(agentId);
+            result.updatedAgents.push(recalcResult.agentCode);
 
             // Send notification to agent about new earnings
+            const agent = update.agent;
             if (agent.user) {
               await this.notificationsService.createNotification({
                 userId: agent.user.id,
@@ -2709,6 +2867,117 @@ export class AgentsService {
 
     // Calculate processing time
     result.batchInfo.processingTimeMs = Date.now() - startTime;
+
+    return result;
+  }
+
+  /**
+   * Bulk upload earnings data for multiple agents
+   * This updates agent records with comprehensive earnings data
+   */
+  async bulkUploadEarningsData(bulkDataUploadDto: any): Promise<any> {
+    const batchId = `DATA-BATCH-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
+    const result: any = {
+      totalProcessed: bulkDataUploadDto.agentsData.length,
+      successful: 0,
+      failed: 0,
+      details: [],
+      batchId,
+      uploadedAt: new Date(),
+    };
+
+    try {
+      for (const agentData of bulkDataUploadDto.agentsData) {
+        const detailResult: any = {
+          agentCode: agentData.agentCode,
+          status: 'error',
+          message: '',
+          updatedFields: [],
+        };
+
+        try {
+          // Find agent by agent code
+          const agent = await this.agentsRepository.findOne({
+            where: { agentCode: agentData.agentCode },
+          });
+
+          if (!agent) {
+            detailResult.error = `Agent not found with code: ${agentData.agentCode}`;
+            result.details.push(detailResult);
+            result.failed++;
+            continue;
+          }
+
+          // Update agent data
+          const updateData: any = {};
+          const updatedFields: string[] = [];
+
+          if (agentData.totalEarnings !== undefined) {
+            updateData.totalEarnings = agentData.totalEarnings;
+            updatedFields.push('totalEarnings');
+          }
+
+          if (agentData.availableBalance !== undefined) {
+            updateData.availableBalance = agentData.availableBalance;
+            updatedFields.push('availableBalance');
+          }
+
+          if (agentData.totalReferrals !== undefined) {
+            updateData.totalReferrals = agentData.totalReferrals;
+            updatedFields.push('totalReferrals');
+          }
+
+          // Store monthly data in metadata
+          const metadata = agent.metadata || {};
+          if (agentData.earningsForCurrentMonth !== undefined) {
+            metadata.currentMonthEarnings = agentData.earningsForCurrentMonth;
+            updatedFields.push('currentMonthEarnings');
+          }
+
+          if (agentData.referralsForCurrentMonth !== undefined) {
+            metadata.currentMonthReferrals = agentData.referralsForCurrentMonth;
+            updatedFields.push('currentMonthReferrals');
+          }
+
+          if (agentData.totalPayoutAmount !== undefined) {
+            metadata.totalPayoutAmount = agentData.totalPayoutAmount;
+            updatedFields.push('totalPayoutAmount');
+          }
+
+          if (agentData.availableMonth) {
+            metadata.dataMonth = agentData.availableMonth;
+            updatedFields.push('dataMonth');
+          }
+
+          // Add batch info to metadata
+          metadata.lastDataUpload = {
+            batchId,
+            uploadedAt: new Date().toISOString(),
+            batchDescription: bulkDataUploadDto.batchDescription,
+          };
+
+          updateData.metadata = metadata;
+
+          // Update agent
+          await this.agentsRepository.update(agent.id, updateData);
+
+          detailResult.status = 'success';
+          detailResult.message = `Agent data updated successfully`;
+          detailResult.updatedFields = updatedFields;
+          result.details.push(detailResult);
+          result.successful++;
+
+        } catch (error) {
+          detailResult.error = error.message || 'Unknown error occurred';
+          result.details.push(detailResult);
+          result.failed++;
+        }
+      }
+
+    } catch (error) {
+      throw new Error(`Bulk earnings data upload failed: ${error.message}`);
+    }
 
     return result;
   }

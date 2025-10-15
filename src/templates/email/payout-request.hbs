@@ -5,118 +5,125 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Payout Request Received</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background: linear-gradient(135deg, #00bcd4, #0891b2); color: white; text-align: center; padding: 30px 20px; border-radius: 12px 12px 0 0; margin: -20px -20px 0 -20px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.5; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background: #f9fafb; }
+        .container { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.07); }
+        .header { background: linear-gradient(135deg, #0891b2, #0e7490); color: white; text-align: center; padding: 32px 24px; }
         .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
-        .header .subtitle { margin: 8px 0 0 0; opacity: 0.9; font-size: 16px; }
-        .content { background: white; padding: 30px; border-radius: 0 0 12px 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .greeting { font-size: 18px; margin-bottom: 20px; }
-        .amount-card { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 2px solid #16a34a; border-radius: 12px; padding: 25px; text-align: center; margin: 25px 0; }
-        .amount { font-size: 36px; font-weight: bold; color: #15803d; margin-bottom: 10px; }
-        .status-badge { background: #fbbf24; color: #92400e; padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 12px; text-transform: uppercase; }
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin: 25px 0; }
-        .detail-item { background: #f8fafc; padding: 15px; border-radius: 8px; border-left: 4px solid #00bcd4; }
-        .detail-label { font-size: 12px; color: #64748b; text-transform: uppercase; font-weight: 600; margin-bottom: 5px; }
-        .detail-value { font-size: 16px; color: #1e293b; font-weight: 500; }
-        .info-card { background: linear-gradient(135deg, #dbeafe, #bfdbfe); border-left: 4px solid #3b82f6; padding: 20px; border-radius: 8px; margin: 25px 0; }
-        .timeline { background: #f8fafc; padding: 20px; border-radius: 8px; margin: 25px 0; }
-        .timeline h3 { margin: 0 0 15px 0; color: #374151; }
-        .timeline-step { display: flex; align-items: center; margin: 12px 0; font-size: 14px; }
-        .timeline-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 12px; }
-        .step-active { background: #16a34a; color: white; }
-        .step-pending { background: #e5e7eb; color: #6b7280; }
-        .button { display: inline-block; background: linear-gradient(135deg, #00bcd4, #0891b2); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: 600; text-align: center; margin: 25px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .support-card { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 20px; margin: 25px 0; }
-        .support-list { list-style: none; padding: 0; margin: 15px 0; }
-        .support-list li { padding: 8px 0; border-bottom: 1px solid #e0e7ff; }
-        .support-list li:last-child { border-bottom: none; }
-        @media (max-width: 480px) { .details-grid { grid-template-columns: 1fr; } }
+        .header .subtitle { margin: 8px 0 0 0; opacity: 0.95; font-size: 15px; }
+        .content { padding: 32px 24px; }
+        .greeting { font-size: 16px; margin-bottom: 16px; color: #1e293b; }
+        .amount-section { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 2px solid #fbbf24; border-radius: 10px; padding: 24px; text-align: center; margin: 20px 0; }
+        .amount { font-size: 38px; font-weight: 700; color: #92400e; margin-bottom: 12px; }
+        .status-badge { background: #fbbf24; color: #78350f; padding: 8px 18px; border-radius: 20px; font-weight: 600; font-size: 13px; letter-spacing: 0.5px; }
+        .details-section { margin: 24px 0; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+        .detail-box { background: #f8fafc; padding: 14px; border-radius: 8px; border-left: 3px solid #0891b2; }
+        .detail-label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .detail-value { font-size: 15px; color: #0f172a; font-weight: 500; word-break: break-all; }
+        .info-box { background: #dbeafe; border-left: 3px solid #3b82f6; padding: 16px; border-radius: 6px; margin: 20px 0; font-size: 14px; color: #1e40af; }
+        .timeline-compact { background: #f8fafc; border-radius: 8px; padding: 16px; margin: 20px 0; }
+        .timeline-title { font-size: 14px; font-weight: 600; color: #334155; margin-bottom: 12px; }
+        .timeline-item { display: flex; align-items: center; padding: 8px 0; font-size: 13px; color: #475569; }
+        .timeline-icon { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 10px; font-size: 11px; flex-shrink: 0; }
+        .icon-active { background: #16a34a; color: white; font-weight: 600; }
+        .icon-pending { background: #e5e7eb; color: #6b7280; }
+        .support-compact { background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; padding: 14px; margin: 20px 0; font-size: 13px; }
+        .support-compact strong { display: block; margin-bottom: 8px; color: #0c4a6e; font-size: 14px; }
+        .support-item { padding: 4px 0; color: #0369a1; }
+        .button { display: inline-block; background: linear-gradient(135deg, #0891b2, #0e7490); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 24px 0 16px 0; box-shadow: 0 2px 4px rgba(8,145,178,0.2); }
+        .button:hover { opacity: 0.95; }
+        .footer { text-align: center; padding: 24px; background: #f9fafb; color: #64748b; font-size: 13px; border-top: 1px solid #e2e8f0; }
+        .footer a { color: #0891b2; text-decoration: none; font-weight: 500; }
+        @media (max-width: 480px) { .details-grid { grid-template-columns: 1fr; } .content { padding: 24px 20px; } }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📋 Payout Request Received</h1>
-        <div class="subtitle">Your request is now being reviewed</div>
-    </div>
-    
-    <div class="content">
-        <div class="greeting">Hi <strong>{{firstName}}</strong>,</div>
-        
-        <p>Great news! We've successfully received your payout request and it's now being reviewed by our finance team.</p>
-
-        <div class="amount-card">
-            <div class="amount">${{amount}}</div>
-            <span class="status-badge">Pending Review</span>
-        </div>
-
-        <div class="details-grid">
-            <div class="detail-item">
-                <div class="detail-label">Payout ID</div>
-                <div class="detail-value">{{payoutId}}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Agent Code</div>
-                <div class="detail-value">{{agentCode}}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Payment Method</div>
-                <div class="detail-value">{{paymentMethod}}</div>
-            </div>
-            <div class="detail-item">
-                <div class="detail-label">Request Date</div>
-                <div class="detail-value">{{requestDate}}</div>
-            </div>
-        </div>
-
-        {{#if description}}
-        <div class="detail-item" style="grid-column: 1 / -1;">
-            <div class="detail-label">Description</div>
-            <div class="detail-value">{{description}}</div>
-        </div>
-        {{/if}}
-
-        <div class="info-card">
-            <strong>🔍 What happens next?</strong><br>
-            Our finance team will review your payout request within 2-3 business days. You'll receive an email notification once your payout has been approved.
-        </div>
-
-        <div class="timeline">
-            <h3>📈 Review Process</h3>
-            <div class="timeline-step">
-                <div class="timeline-icon step-active">✓</div>
-                <div><strong>Request Received</strong> - Your payout request has been submitted</div>
-            </div>
-            <div class="timeline-step">
-                <div class="timeline-icon step-pending">2</div>
-                <div><strong>Under Review</strong> - Finance team is verifying your request</div>
-            </div>
-            <div class="timeline-step">
-                <div class="timeline-icon step-pending">3</div>
-                <div><strong>Approval</strong> - Decision and processing</div>
-            </div>
-            <div class="timeline-step">
-                <div class="timeline-icon step-pending">4</div>
-                <div><strong>Payment</strong> - Funds transferred to your account</div>
-            </div>
-        </div>
-
-        <div style="text-align: center;">
-            <a href="{{agentPortalUrl}}/payouts" class="button">📊 View Payout Status</a>
-        </div>
-
-        <div class="support-card">
-            <strong>💬 Need Help?</strong><br>
-            Our support team is here to help with any questions about your payout:
-            <ul class="support-list">
-                <li>📧 <strong>Email:</strong> <a href="mailto:{{supportEmail}}">{{supportEmail}}</a></li>
-                <li>📱 <strong>Phone:</strong> {{supportPhone}}</li>
-                <li>💬 <strong>Live Chat:</strong> Available in your agent dashboard</li>
-                <li>🎫 <strong>Reference:</strong> {{payoutId}}</li>
-            </ul>
+    <div class="container">
+        <div class="header">
+            <h1>📋 Payout Request Received</h1>
+            <div class="subtitle">Now under review</div>
         </div>
         
-        <div style="text-align: center; margin-top: 30px; color: #64748b; font-size: 14px;">
-            Thank you for being part of the PlanetTalk community! 🌟
+        <div class="content">
+            <div class="greeting">Hi <strong>{{firstName}}</strong>,</div>
+            
+            <p style="margin: 0 0 20px 0; color: #475569; font-size: 15px;">We've received your payout request and it's now being reviewed by our finance team.</p>
+
+            <div class="amount-section">
+                <div class="amount">${{amount}}</div>
+                <span class="status-badge">PENDING REVIEW</span>
+            </div>
+
+            <div class="details-section">
+                <div class="details-grid">
+                    <div class="detail-box">
+                        <div class="detail-label">Payout ID</div>
+                        <div class="detail-value">{{payoutId}}</div>
+                    </div>
+                    <div class="detail-box">
+                        <div class="detail-label">Agent Code</div>
+                        <div class="detail-value">{{agentCode}}</div>
+                    </div>
+                    <div class="detail-box">
+                        <div class="detail-label">Payment Method</div>
+                        <div class="detail-value">{{paymentMethod}}</div>
+                    </div>
+                    <div class="detail-box">
+                        <div class="detail-label">Request Date</div>
+                        <div class="detail-value">{{requestDate}}</div>
+                    </div>
+                </div>
+            </div>
+
+            {{#if description}}
+            <div class="detail-box" style="border-left-color: #94a3b8;">
+                <div class="detail-label">Description</div>
+                <div class="detail-value">{{description}}</div>
+            </div>
+            {{/if}}
+
+            <div class="info-box">
+                <strong>🔍 What's Next:</strong> Our finance team will review your request within 2-3 business days. You'll receive an email notification once approved.
+            </div>
+
+            <div class="timeline-compact">
+                <div class="timeline-title">Review Process</div>
+                <div class="timeline-item">
+                    <div class="timeline-icon icon-active">✓</div>
+                    <div><strong>Request Submitted</strong> - Received and queued</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-icon icon-pending">2</div>
+                    <div><strong>Under Review</strong> - Finance verification</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-icon icon-pending">3</div>
+                    <div><strong>Approved</strong> - Processing payment</div>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-icon icon-pending">4</div>
+                    <div><strong>Complete</strong> - Funds transferred</div>
+                </div>
+            </div>
+
+            <div style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 8px; margin: 20px 0;">
+                <p style="margin: 0; color: #475569; font-size: 14px;">
+                    <strong>📱 Track Status:</strong> Login to your account at<br>
+                    <a href="{{agentPortalUrl}}" style="color: #0891b2; text-decoration: none; font-weight: 600;">portal.planettalk.com</a>
+                </p>
+            </div>
+
+            <div class="support-compact">
+                <strong>💬 Need Help?</strong>
+                <div class="support-item">📧 Email: <a href="mailto:agent@planettalk.com" style="color: #0891b2; text-decoration: none; font-weight: 600;">agent@planettalk.com</a></div>
+                <div class="support-item">💬 Live Chat: Available in your dashboard</div>
+                <div class="support-item">🎫 Reference: {{payoutId}}</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p style="margin: 0 0 8px 0;"><strong>Thank you for being part of PlanetTalk!</strong></p>
+            <p style="margin: 0;">Best regards, <strong>The PlanetTalk Team</strong></p>
         </div>
     </div>
 </body>

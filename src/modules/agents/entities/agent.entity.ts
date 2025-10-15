@@ -79,6 +79,20 @@ export class Agent {
   notes: string;
 
   @Column({ type: 'json', nullable: true })
+  bankDetails: {
+    bankName?: string;
+    branchNameOrCode?: string;
+    accountName?: string;
+    accountNumberOrIban?: string;
+    swiftBicCode?: string;
+    currency?: string;
+    bankCountry?: string;
+    additionalNotes?: string;
+    verifiedAt?: string;
+    lastUpdatedAt?: string;
+  };
+
+  @Column({ type: 'json', nullable: true })
   metadata: Record<string, any>;
 
   @Column({ type: 'timestamp', nullable: true })
