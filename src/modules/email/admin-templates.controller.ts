@@ -121,7 +121,6 @@ export class AdminTemplatesController {
         agentTier: 'Silver',
         minimumPayout: 100,
         payoutSchedule: 'Weekly',
-        supportPhone: '1-800-SUPPORT',
       },
       'password-reset': {
         firstName: 'John',

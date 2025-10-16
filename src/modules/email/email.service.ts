@@ -220,7 +220,6 @@ export class EmailService {
       agentTier?: string;
       minimumPayout?: number;
       payoutSchedule?: string;
-      supportPhone?: string;
     }
   ): Promise<boolean> {
     const subject = 'Welcome to Agent Portal - Your Login Credentials';
@@ -238,7 +237,6 @@ export class EmailService {
         agentTier: additionalData?.agentTier || 'Bronze',
         minimumPayout: additionalData?.minimumPayout || 50,
         payoutSchedule: additionalData?.payoutSchedule || 'Weekly',
-        supportPhone: additionalData?.supportPhone || '1-800-SUPPORT',
         subtitle: 'Welcome to Our Agent Network!',
       },
     });
