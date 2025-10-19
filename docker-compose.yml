@@ -36,6 +36,12 @@ services:
       - MAILGUN_FROM_NAME=${MAILGUN_FROM_NAME}
       - MAILGUN_API_URL=${MAILGUN_API_URL}
       - FRONTEND_URL=https://portal.planettalk.com
+      # Digital Ocean Spaces (S3-compatible) Configuration
+      - DO_SPACES_ACCESS_KEY=${DO_SPACES_ACCESS_KEY}
+      - DO_SPACES_SECRET_KEY=${DO_SPACES_SECRET_KEY}
+      - DO_SPACES_ENDPOINT=${DO_SPACES_ENDPOINT}
+      - DO_SPACES_REGION=${DO_SPACES_REGION}
+      - DO_SPACES_BUCKET=${DO_SPACES_BUCKET}
     expose:
       - "3001"
     ports:
@@ -88,6 +94,12 @@ services:
       - MAILGUN_FROM_EMAIL=${MAILGUN_FROM_EMAIL:-}
       - MAILGUN_FROM_NAME=${MAILGUN_FROM_NAME:-}
       - MAILGUN_API_URL=${MAILGUN_API_URL:-}
+      # Digital Ocean Spaces (S3-compatible) Configuration
+      - DO_SPACES_ACCESS_KEY=${DO_SPACES_ACCESS_KEY:-}
+      - DO_SPACES_SECRET_KEY=${DO_SPACES_SECRET_KEY:-}
+      - DO_SPACES_ENDPOINT=${DO_SPACES_ENDPOINT:-}
+      - DO_SPACES_REGION=${DO_SPACES_REGION:-}
+      - DO_SPACES_BUCKET=${DO_SPACES_BUCKET:-}
     ports:
       - "3000:3001"
     depends_on:
