@@ -15,12 +15,21 @@ export class S3Service {
 
   constructor(private configService: ConfigService) {
     this.bucketName = this.configService.get<string>('DO_SPACES_BUCKET');
-    this.region = this.configService.get<string>('DO_SPACES_REGION', 'lon1');
+    
+    // Ensure region is always set, default to 'lon1' for Digital Ocean London
+    const envRegion = this.configService.get<string>('DO_SPACES_REGION');
+    this.region = envRegion && envRegion.trim() !== '' ? envRegion : 'lon1';
+    
     this.endpoint = this.configService.get<string>('DO_SPACES_ENDPOINT');
+
+    this.logger.log(`🔧 Initializing S3 Service...`);
+    this.logger.log(`   - Bucket: ${this.bucketName}`);
+    this.logger.log(`   - Region: ${this.region} ${envRegion ? '(from env)' : '(hardcoded default)'}`);
+    this.logger.log(`   - Endpoint: ${this.endpoint}`);
 
     this.s3Client = new S3Client({
       endpoint: this.endpoint,
-      region: this.region,
+      region: this.region, // Guaranteed to be non-empty
       credentials: {
         accessKeyId: this.configService.get<string>('DO_SPACES_ACCESS_KEY'),
         secretAccessKey: this.configService.get<string>('DO_SPACES_SECRET_KEY'),
@@ -29,7 +38,7 @@ export class S3Service {
       tls: true,
     });
 
-    this.logger.log(`S3 Service initialized with bucket: ${this.bucketName}, region: ${this.region}`);
+    this.logger.log(`✅ S3 Service initialized successfully with region: ${this.region}`);
   }
 
   /**
