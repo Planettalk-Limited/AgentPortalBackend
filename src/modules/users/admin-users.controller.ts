@@ -14,6 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
+import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 
 @ApiTags('Admin - User Management')
@@ -58,10 +59,39 @@ export class AdminUsersController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Create new user (Admin)' })
-  @ApiResponse({ status: 201, description: 'User created successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid user data' })
-  createUser(@Body() createUserDto: CreateUserDto) {
+  @ApiOperation({ 
+    summary: 'Create fully setup user (Admin)', 
+    description: `Creates a fully configured user account with admin override. Features:
+    - Email is automatically verified
+    - Status is set to ACTIVE
+    - Role defaults to ADMIN (can be overridden)
+    - No first login flow required
+    - User can login immediately
+    
+    This is ideal for creating admin accounts or setting up users who need immediate access.`
+  })
+  @ApiResponse({ 
+    status: 201, 
+    description: 'User created successfully - ready for immediate login',
+    schema: {
+      example: {
+        id: 'uuid',
+        firstName: 'John',
+        lastName: 'Doe',
+        email: 'john.doe@example.com',
+        username: 'johndoe',
+        country: 'ZW',
+        role: 'admin',
+        status: 'active',
+        emailVerifiedAt: '2025-01-19T10:30:00.000Z',
+        isFirstLogin: false,
+        createdAt: '2025-01-19T10:30:00.000Z',
+        updatedAt: '2025-01-19T10:30:00.000Z'
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid user data or user already exists' })
+  createUser(@Body() createUserDto: AdminCreateUserDto) {
     return this.usersService.createUserAdmin(createUserDto);
   }
 

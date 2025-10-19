@@ -459,6 +459,14 @@ export class UsersService {
     };
   }
 
+  /**
+   * Admin-created users with full setup:
+   * - Email is auto-verified
+   * - Status is set to ACTIVE
+   * - Role defaults to ADMIN (can be overridden)
+   * - No first login flow required
+   * - Ready to use immediately
+   */
   async createUserAdmin(createUserDto: CreateUserDto): Promise<User> {
     const existingUser = await this.usersRepository.findOne({
       where: [{ email: createUserDto.email }, { username: createUserDto.username }],
@@ -468,7 +476,39 @@ export class UsersService {
       throw new BadRequestException('User with this email or username already exists');
     }
 
-    return this.create(createUserDto);
+    // Hash password
+    const saltRounds = parseInt(this.configService.get('BCRYPT_ROUNDS', '10'));
+    const hashedPassword = await bcrypt.hash(createUserDto.password, saltRounds);
+
+    // Create fully setup user with admin override
+    const user = this.usersRepository.create({
+      firstName: createUserDto.firstName,
+      lastName: createUserDto.lastName,
+      country: createUserDto.country,
+      username: createUserDto.username,
+      email: createUserDto.email,
+      passwordHash: hashedPassword,
+      phoneNumber: createUserDto.phoneNumber,
+      // Admin overrides - full setup
+      role: createUserDto.role || UserRole.ADMIN, // Default to ADMIN
+      status: UserStatus.ACTIVE, // Auto-activate
+      emailVerifiedAt: new Date(), // Auto-verify email
+      isFirstLogin: false, // Skip first login flow
+      metadata: {
+        createdBy: 'admin',
+        createdVia: 'admin_panel',
+        adminCreatedFullySetup: true,
+        emailAutoVerified: true,
+        skipFirstLoginFlow: true,
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    const savedUser = await this.usersRepository.save(user);
+
+    console.log(`[ADMIN] Fully setup user created: ${savedUser.email} (${savedUser.role}) - ID: ${savedUser.id}`);
+
+    return savedUser;
   }
 
   async updateUserRole(id: string, newRole: string, reason?: string): Promise<User> {

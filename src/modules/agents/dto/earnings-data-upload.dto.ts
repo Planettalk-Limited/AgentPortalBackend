@@ -56,14 +56,15 @@ export class AgentEarningsDataDto {
   @Min(0)
   referralsForCurrentMonth: number;
 
-  @ApiProperty({ 
-    description: 'Available balance for payout',
+  @ApiPropertyOptional({ 
+    description: 'Available balance for payout (optional - will be auto-calculated as totalEarnings - totalPayoutAmount if not provided)',
     example: 1100.50,
     minimum: 0
   })
+  @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  availableBalance: number;
+  availableBalance?: number;
 
   @ApiProperty({ 
     description: 'Total payout amount (all time)',

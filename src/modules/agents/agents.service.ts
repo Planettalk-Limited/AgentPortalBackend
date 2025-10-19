@@ -2918,9 +2918,20 @@ export class AgentsService {
             updatedFields.push('totalEarnings');
           }
 
+          // Auto-calculate availableBalance if not provided
+          // Formula: availableBalance = totalEarnings - totalPayoutAmount
           if (agentData.availableBalance !== undefined) {
             updateData.availableBalance = agentData.availableBalance;
             updatedFields.push('availableBalance');
+          } else if (agentData.totalEarnings !== undefined && agentData.totalPayoutAmount !== undefined) {
+            // Calculate automatically
+            updateData.availableBalance = Number(agentData.totalEarnings) - Number(agentData.totalPayoutAmount);
+            updatedFields.push('availableBalance (calculated)');
+          } else if (agentData.totalEarnings !== undefined) {
+            // If no totalPayoutAmount, use agent's existing or assume 0
+            const totalPayout = agentData.totalPayoutAmount || agent.metadata?.totalPayoutAmount || 0;
+            updateData.availableBalance = Number(agentData.totalEarnings) - Number(totalPayout);
+            updatedFields.push('availableBalance (calculated)');
           }
 
           if (agentData.totalReferrals !== undefined) {
