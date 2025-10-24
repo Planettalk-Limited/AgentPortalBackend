@@ -194,10 +194,10 @@ export class PlanetTalkSeeder {
     const agentUsers = users.filter(user => user.role === UserRole.AGENT);
 
     const agentConfigs = [
-      { tier: AgentTier.BRONZE, commissionRate: 12.0, notes: 'New to PlanetTalk referral program' },
-      { tier: AgentTier.SILVER, commissionRate: 15.0, notes: 'Growing network in diaspora community' },
-      { tier: AgentTier.GOLD, commissionRate: 18.0, notes: 'Strong community presence and referrals' },
-      { tier: AgentTier.PLATINUM, commissionRate: 22.0, notes: 'Top performer - extensive diaspora network' },
+      { tier: AgentTier.BRONZE, commissionRate: 10.0, notes: 'New to PlanetTalk referral program' },
+      { tier: AgentTier.SILVER, commissionRate: 10.0, notes: 'Growing network in diaspora community' },
+      { tier: AgentTier.GOLD, commissionRate: 10.0, notes: 'Strong community presence and referrals' },
+      { tier: AgentTier.PLATINUM, commissionRate: 10.0, notes: 'Top performer - extensive diaspora network' },
     ];
 
     for (let i = 0; i < agentUsers.length; i++) {

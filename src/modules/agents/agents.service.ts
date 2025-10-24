@@ -338,7 +338,7 @@ export class AgentsService {
       pendingBalance: 0,
       totalReferrals: 0,
       activeReferrals: 0,
-      commissionRate: 20.00, // Higher commission rate for admins
+      commissionRate: 10.00, // Standard commission rate
       notes: `Auto-created agent record for ${user.role}: ${user.firstName} ${user.lastName}`,
       activatedAt: new Date(),
       lastActivityAt: new Date(),
@@ -678,7 +678,7 @@ export class AgentsService {
     // Generate unique agent code
     const agentCode = await this.generateAgentCode();
     
-    // Create agent with bronze tier and 15% commission rate
+    // Create agent with bronze tier and 10% commission rate
     const agent = this.agentsRepository.create({
       userId: user.id,
       agentCode,
@@ -689,7 +689,7 @@ export class AgentsService {
       pendingBalance: 0,
       totalReferrals: 0,
       activeReferrals: 0,
-      commissionRate: 15.00, // 15% commission as specified
+      commissionRate: 10.00, // 10% commission as specified
       activatedAt: new Date(),
       lastActivityAt: new Date(),
     });
@@ -760,7 +760,7 @@ export class AgentsService {
       pendingBalance: 0,
       totalReferrals: 0,
       activeReferrals: 0,
-      commissionRate: 15.00, // 15% commission as specified
+      commissionRate: 10.00, // 10% commission as specified
       activatedAt: null, // Will be set on approval
       lastActivityAt: new Date(),
       metadata: {
@@ -863,7 +863,7 @@ export class AgentsService {
       agentCode: agent.agentCode,
       commissionRate: agent.commissionRate.toString(),
       tier: agent.tier,
-      minimumPayout: '3', // Default minimum payout
+      minimumPayout: '20', // Default minimum payout
       payoutProcessing: 'Monthly on the 15th',
       loginUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'

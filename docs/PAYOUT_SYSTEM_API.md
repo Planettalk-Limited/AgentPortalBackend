@@ -484,7 +484,7 @@ All email templates have access to:
 ## Validation Rules
 
 ### Payout Amounts
-- **Minimum**: $3.00
+- **Minimum**: $20.00
 - **Maximum**: $100,000.00
 - **Precision**: 2 decimal places
 

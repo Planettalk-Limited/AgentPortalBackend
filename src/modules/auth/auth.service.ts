@@ -780,7 +780,7 @@ export class AuthService {
             agentCode: agent.agentCode,
             commissionRate: agent.commissionRate.toString(),
             tier: agent.tier,
-            minimumPayout: '3', // Default minimum payout
+            minimumPayout: '20', // Default minimum payout
             payoutProcessing: 'Monthly on the 15th',
             loginUrl: process.env.NODE_ENV === 'production' 
               ? 'https://portal.planettalk.com/en'

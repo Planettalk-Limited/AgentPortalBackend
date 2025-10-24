@@ -60,7 +60,7 @@ The endpoint accepts a JSON payload with the following structure:
       "amount": 15.75,
       "type": "referral_commission",
       "description": "Commission for mobile top-up referral",
-      "commissionRate": 12.0
+      "commissionRate": 10.0
     }
   ],
   "batchDescription": "Monthly commission upload - January 2025",

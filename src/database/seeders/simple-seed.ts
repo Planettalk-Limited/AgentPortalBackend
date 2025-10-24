@@ -80,7 +80,7 @@ async function seed() {
       phone: agentUser1.phoneNumber,
       userId: agentUser1.id,
       status: AgentStatus.ACTIVE,
-      commissionRate: 15.00,
+      commissionRate: 10.00,
       notes: 'Top performing agent - Gold tier',
     });
 
@@ -91,7 +91,7 @@ async function seed() {
       phone: agentUser2.phoneNumber,
       userId: agentUser2.id,
       status: AgentStatus.ACTIVE,
-      commissionRate: 12.50,
+      commissionRate: 10.00,
       notes: 'Solid performer - Silver tier',
     });
 

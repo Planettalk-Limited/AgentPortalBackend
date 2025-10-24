@@ -235,7 +235,7 @@ export class EmailService {
         loginUrl,
         commissionRate: additionalData?.commissionRate || 10,
         agentTier: additionalData?.agentTier || 'Bronze',
-        minimumPayout: additionalData?.minimumPayout || 50,
+        minimumPayout: additionalData?.minimumPayout || 20,
         payoutSchedule: additionalData?.payoutSchedule || 'Weekly',
         subtitle: 'Welcome to Our Agent Network!',
       },

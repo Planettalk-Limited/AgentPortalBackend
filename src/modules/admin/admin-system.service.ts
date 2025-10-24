@@ -194,7 +194,7 @@ export class AdminSystemService {
         emailVerificationRequired: true,
       },
       payout: {
-        minimumPayoutAmount: 10,
+        minimumPayoutAmount: 20,
         maximumPayoutAmount: 100000,
         processingFee: 5,
         autoApprovalThreshold: 1000,

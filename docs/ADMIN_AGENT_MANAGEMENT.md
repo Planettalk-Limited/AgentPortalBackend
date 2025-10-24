@@ -35,7 +35,7 @@ Create a new agent from the admin panel.
   "zipCode": "10001",
   "country": "US",
   "status": "pending_application",
-  "commissionRate": 15.0,
+  "commissionRate": 10.0,
   "notes": "New agent onboarding via admin panel",
   "userId": "existing-user-uuid-optional"
 }
@@ -87,7 +87,7 @@ Create a new agent from the admin panel.
   "pendingBalance": 0.00,
   "totalReferrals": 0,
   "activeReferrals": 0,
-  "commissionRate": 15.0,
+  "commissionRate": 10.0,
   "notes": "New agent onboarding via admin panel",
   "activatedAt": "2025-10-11T10:00:00.000Z",
   "lastActivityAt": "2025-10-11T10:00:00.000Z",
@@ -219,7 +219,7 @@ GET /admin/agents/6a30122e-dc7d-420b-bc49-701968ba014d
   "pendingBalance": 100.00,
   "totalReferrals": 8,
   "activeReferrals": 6,
-  "commissionRate": 15.0,
+  "commissionRate": 10.0,
   "activatedAt": "2025-10-08T07:16:14.438Z",
   "lastActivityAt": "2025-10-11T09:30:00.000Z",
   "notes": "Top performer this month",
@@ -252,7 +252,7 @@ Update agent information and settings.
 {
   "status": "active",
   "tier": "silver",
-  "commissionRate": 18.0,
+  "commissionRate": 10.0,
   "notes": "Promoted to silver tier due to excellent performance",
   "metadata": {
     "promotedBy": "admin-user-id",
@@ -268,7 +268,7 @@ Update agent information and settings.
   "agentCode": "AGT15616",
   "status": "active",
   "tier": "silver",
-  "commissionRate": 18.0,
+  "commissionRate": 10.0,
   "notes": "Promoted to silver tier due to excellent performance",
   "updatedAt": "2025-10-11T10:00:00.000Z"
 }
@@ -887,7 +887,7 @@ POST /admin/agents
   "firstName": "Jane",
   "lastName": "Smith",
   "email": "jane.smith@example.com",
-  "commissionRate": 15.0
+  "commissionRate": 10.0
 }
 
 # 2. Activate agent

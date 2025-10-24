@@ -117,9 +117,9 @@ export class AdminTemplatesController {
         agentCode: 'AGT12345',
         temporaryPassword: 'TempPass123',
         loginUrl: 'https://portal.example.com/login',
-        commissionRate: 12,
+        commissionRate: 10,
         agentTier: 'Silver',
-        minimumPayout: 100,
+        minimumPayout: 20,
         payoutSchedule: 'Weekly',
       },
       'password-reset': {

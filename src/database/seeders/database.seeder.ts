@@ -226,7 +226,7 @@ export class DatabaseSeeder {
         pendingBalance: 800.00,
         totalReferrals: 45,
         activeReferrals: 32,
-        commissionRate: 15.00,
+        commissionRate: 10.00,
         activatedAt: new Date('2023-06-15'),
       },
       {
@@ -237,7 +237,7 @@ export class DatabaseSeeder {
         pendingBalance: 450.00,
         totalReferrals: 28,
         activeReferrals: 22,
-        commissionRate: 12.50,
+        commissionRate: 10.00,
         activatedAt: new Date('2023-08-22'),
       },
       {

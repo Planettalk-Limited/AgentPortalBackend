@@ -14,11 +14,11 @@ import { PayoutMethod } from '../entities/payout.entity';
 export class CreatePayoutRequestDto {
   @ApiProperty({ 
     description: 'Amount to request for payout',
-    minimum: 3,
+    minimum: 20,
     maximum: 100000 
   })
   @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(3, { message: 'Minimum payout amount is $3' })
+  @Min(20, { message: 'Minimum payout amount is $20' })
   @Max(100000, { message: 'Maximum payout amount is $100,000' })
   amount: number;
 

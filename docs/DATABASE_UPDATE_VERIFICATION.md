@@ -220,7 +220,7 @@ availableBalance: 80.00         ← Will be REPLACED
 pendingBalance: 0.00            ← No change
 totalReferrals: 40              ← Will be REPLACED
 activeReferrals: 0              ← No change
-commissionRate: 20.00           ← No change
+commissionRate: 10.00           ← No change
 metadata: {
   "autoCreated": true,
   "originalRole": "pt_admin",
@@ -241,7 +241,7 @@ availableBalance: 100.00        ← UPDATED ✅ (calculated)
 pendingBalance: 0.00            ← No change
 totalReferrals: 45              ← UPDATED ✅
 activeReferrals: 0              ← No change
-commissionRate: 20.00           ← No change
+commissionRate: 10.00           ← No change
 metadata: {
   "autoCreated": true,                              ← Preserved
   "originalRole": "pt_admin",                       ← Preserved

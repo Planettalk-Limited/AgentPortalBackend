@@ -18,7 +18,7 @@ curl -X POST "http://localhost:3001/admin/resources/create-link" \
     "category": "training",
     "visibility": "public",
     "isEmbedded": true,
-    "embeddedContent": "<h2>Commission Structure</h2><ul><li>Standard Rate: 10%</li><li>Gold Tier: 12%</li><li>Platinum Tier: 15%</li></ul><h3>Payout Schedule</h3><p>Monthly on the 15th</p><h3>Minimum Payout</h3><p>$3.00 USD</p>",
+    "embeddedContent": "<h2>Commission Structure</h2><ul><li>Standard Rate: 10%</li><li>All Tiers: 10%</li></ul><h3>Payout Schedule</h3><p>Monthly on the 15th</p><h3>Minimum Payout</h3><p>$20.00 USD</p>",
     "isFeatured": true,
     "tags": ["commission", "quick-guide", "payout"]
   }'
@@ -129,7 +129,7 @@ curl -X POST "http://localhost:3001/admin/resources/create-link" \
     "category": "announcement",
     "visibility": "public",
     "isEmbedded": true,
-    "embeddedContent": "<h2>Platform Updates - January 2025</h2><h3>🆕 New Features</h3><ul><li>Enhanced agent dashboard</li><li>Real-time commission tracking</li><li>Mobile app improvements</li><li>New payout methods</li></ul><h3>📈 Commission Updates</h3><ul><li>Increased rates for Gold tier agents</li><li>New bonus structure for high performers</li><li>Reduced minimum payout to $3</li></ul><h3>🔧 Technical Improvements</h3><ul><li>Faster loading times</li><li>Better mobile experience</li><li>Enhanced security features</li></ul><p><strong>Effective Date:</strong> January 15, 2025</p>",
+    "embeddedContent": "<h2>Platform Updates - January 2025</h2><h3>🆕 New Features</h3><ul><li>Enhanced agent dashboard</li><li>Real-time commission tracking</li><li>Mobile app improvements</li><li>New payout methods</li></ul><h3>📈 Commission Updates</h3><ul><li>Standard commission rate: 10%</li><li>New bonus structure for high performers</li><li>Minimum payout threshold: $20</li></ul><h3>🔧 Technical Improvements</h3><ul><li>Faster loading times</li><li>Better mobile experience</li><li>Enhanced security features</li></ul><p><strong>Effective Date:</strong> January 15, 2025</p>",
     "isFeatured": true,
     "tags": ["update", "announcement", "platform", "commission"],
     "publishedAt": "2025-01-15T00:00:00Z"
