@@ -363,13 +363,49 @@ export class AuthService {
     return this.getProfile(userId);
   }
 
+  async setInitialPassword(
+    userId: string,
+    newPassword: string
+  ): Promise<{ success: boolean; message: string }> {
+    const user = await this.usersService.findByIdWithPassword(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    // Check if user already has a password set
+    if (user.passwordHash) {
+      throw new BadRequestException(
+        'Password is already set. Please use "Change Password" instead.'
+      );
+    }
+
+    // Hash new password
+    const saltRounds = parseInt(this.configService.get('BCRYPT_ROUNDS', '10'));
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+    // Set password
+    await this.usersService.update(userId, { passwordHash: hashedPassword });
+
+    return {
+      success: true,
+      message: 'Password set successfully. You can now use it to login.',
+    };
+  }
+
   async changePassword(
     userId: string,
     passwordData: { currentPassword: string; newPassword: string }
   ): Promise<{ success: boolean; message: string }> {
-    const user = await this.usersService.findById(userId);
+    const user = await this.usersService.findByIdWithPassword(userId);
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+
+    // Check if user has a password set
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'No password is currently set for this account. Please use "Set Initial Password" endpoint first.'
+      );
     }
 
     // Verify current password

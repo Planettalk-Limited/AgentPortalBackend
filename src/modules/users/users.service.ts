@@ -38,7 +38,7 @@ export class UsersService {
    * Register a new user with automatic agent and referral data creation
    * User starts as PENDING and receives welcome email with their login details
    */
-  async register(registerData: { firstName: string; lastName: string; country: string; phoneNumber: string; email: string; password: string }): Promise<any> {
+  async register(registerData: { firstName: string; lastName: string; country: string; phoneNumber?: string; email: string; password: string }): Promise<any> {
     // Check if user already exists
     const existingUser = await this.usersRepository.findOne({
       where: { email: registerData.email },
@@ -52,11 +52,14 @@ export class UsersService {
     const saltRounds = parseInt(this.configService.get('BCRYPT_ROUNDS', '10'));
     const hashedPassword = await bcrypt.hash(registerData.password, saltRounds);
 
+    // Normalize phone number - convert empty string to null
+    const phoneNumber = registerData.phoneNumber?.trim() || null;
+
     const user = this.usersRepository.create({
       firstName: registerData.firstName,
       lastName: registerData.lastName,
       country: registerData.country,
-      phoneNumber: registerData.phoneNumber,
+      phoneNumber: phoneNumber,
       email: registerData.email,
       passwordHash: hashedPassword,
       role: UserRole.AGENT,
@@ -234,6 +237,19 @@ export class UsersService {
     const user = await this.usersRepository.findOne({
       where: { id },
       select: ['id', 'email', 'firstName', 'lastName', 'country', 'role', 'status', 'metadata', 'createdAt', 'updatedAt'],
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${id} not found`);
+    }
+
+    return user;
+  }
+
+  async findByIdWithPassword(id: string): Promise<User> {
+    const user = await this.usersRepository.findOne({
+      where: { id },
+      select: ['id', 'email', 'firstName', 'lastName', 'country', 'role', 'status', 'passwordHash', 'metadata', 'createdAt', 'updatedAt'],
     });
 
     if (!user) {

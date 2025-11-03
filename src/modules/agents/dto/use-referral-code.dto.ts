@@ -16,10 +16,12 @@ export class UseReferralCodeDto {
   fullName: string;
 
   @ApiProperty({ 
-    description: 'Phone number that will be used for airtime top-ups (with country code)',
-    example: '+234803456789'
+    description: 'Phone number that will be used for airtime top-ups (with country code) - optional',
+    example: '+234803456789',
+    required: false
   })
+  @IsOptional()
   @IsString()
   @MaxLength(20)
-  phoneNumber: string;
+  phoneNumber?: string;
 }

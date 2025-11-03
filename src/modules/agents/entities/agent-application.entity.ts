@@ -60,7 +60,7 @@ export class AgentApplication {
   @Column({ type: 'varchar', length: 255 })
   email: string;
 
-  @Column({ type: 'varchar', length: 20 })
+  @Column({ type: 'varchar', length: 20, nullable: true })
   phoneNumber: string;
 
   @Column({ type: 'date', nullable: true })

@@ -222,7 +222,7 @@ export class EmailService {
       payoutSchedule?: string;
     }
   ): Promise<boolean> {
-    const subject = 'Welcome to Agent Portal - Your Login Credentials';
+    const subject = `Welcome, ${firstName}! Your PlanetTalk Agent Journey Begins 🎉`;
 
     return this.sendEmail({
       to: email,
@@ -242,6 +242,29 @@ export class EmailService {
     });
   }
 
+  async sendAdminInvite(
+    email: string,
+    firstName: string,
+    temporaryPassword: string,
+    loginUrl: string,
+  ): Promise<boolean> {
+    const subject = 'Your PlanetTalk Admin Access is Ready';
+
+    return this.sendEmail({
+      to: email,
+      subject,
+      template: 'admin-invite',
+      templateData: {
+        firstName,
+        email,
+        temporaryPassword,
+        loginUrl,
+        title: 'Admin Access Granted',
+        subtitle: 'Welcome to the PlanetTalk Admin Portal',
+      },
+    });
+  }
+
   async sendPasswordResetEmail(
     email: string,
     firstName: string,
@@ -249,7 +272,7 @@ export class EmailService {
     resetUrl: string,
     has2FA: boolean = false
   ): Promise<boolean> {
-    const subject = 'Password Reset Request - Agent Portal';
+    const subject = 'Reset Your PlanetTalk Agent Password';
 
     return this.sendEmail({
       to: email,
@@ -379,7 +402,7 @@ export class EmailService {
     firstName: string,
     otp: string
   ): Promise<boolean> {
-    const subject = '📧 Verify Your Email - Agent Portal';
+    const subject = 'Verify Your Email to Activate Your Agent Account';
 
     return this.sendEmail({
       to: email,

@@ -29,9 +29,13 @@ export class CreateAgentApplicationDto {
   @MaxLength(255)
   email: string;
 
-  @ApiProperty({ description: 'Phone number of the applicant' })
-  @IsPhoneNumber()
-  phoneNumber: string;
+  @ApiProperty({ 
+    description: 'Phone number of the applicant (optional)', 
+    required: false 
+  })
+  @IsOptional()
+  @IsPhoneNumber(null, { message: 'Please provide a valid phone number with country code' })
+  phoneNumber?: string;
 
   @ApiPropertyOptional({ description: 'Date of birth' })
   @IsOptional()

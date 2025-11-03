@@ -32,13 +32,15 @@ export class RegisterDto {
   country: string;
 
   @ApiProperty({ 
-    description: 'Phone number with country code', 
-    example: '+1234567890'
+    description: 'Phone number with country code (optional)', 
+    example: '+1234567890',
+    required: false
   })
+  @IsOptional()
   @Matches(/^\+[1-9]\d{1,14}$/, { 
     message: 'Phone number must start with + followed by country code and 7-15 digits (e.g., +1234567890)' 
   })
-  phoneNumber: string;
+  phoneNumber?: string;
 
   @ApiProperty({ description: 'Email address (unique)', example: 'john.doe@example.com' })
   @IsEmail()

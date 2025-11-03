@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { SetInitialPasswordDto } from './dto/set-initial-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -294,12 +295,29 @@ export class AuthController {
   }
 
   @UseGuards(AuthGuard('jwt'))
+  @Post('set-initial-password')
+  @ApiBearerAuth()
+  @ApiOperation({ 
+    summary: 'Set initial password (for accounts without password)',
+    description: 'Use this endpoint if your account was created without a password. After setting, use the change-password endpoint for future changes.'
+  })
+  @ApiBody({ type: SetInitialPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password set successfully' })
+  @ApiResponse({ status: 400, description: 'Password already set or invalid request' })
+  async setInitialPassword(
+    @Request() req: any,
+    @Body() passwordData: SetInitialPasswordDto
+  ) {
+    return this.authService.setInitialPassword(req.user.id, passwordData.newPassword);
+  }
+
+  @UseGuards(AuthGuard('jwt'))
   @Patch('change-password')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Change user password' })
   @ApiBody({ type: ChangePasswordDto })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid current password' })
+  @ApiResponse({ status: 400, description: 'Invalid current password or no password set' })
   async changePassword(
     @Request() req: any,
     @Body() passwordData: ChangePasswordDto
