@@ -73,6 +73,10 @@ export class EnvironmentVariables {
 
   @IsOptional()
   @IsString()
+  MAILGUN_FROM_NAME?: string;
+
+  @IsOptional()
+  @IsString()
   MAILGUN_API_URL?: string;
 
   @IsNumber()

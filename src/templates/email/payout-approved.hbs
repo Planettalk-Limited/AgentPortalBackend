@@ -10,7 +10,7 @@
         .header { background: linear-gradient(135deg, #16a34a, #15803d); color: white; text-align: center; padding: 32px 24px; }
         .header h1 { margin: 0; font-size: 28px; font-weight: 600; }
         .header .subtitle { margin: 8px 0 0 0; opacity: 0.95; font-size: 15px; }
-        .content { padding: 32px 24px; }
+        .content { padding: 32px 24px; background: #f8fafb; }
         .greeting { font-size: 16px; margin-bottom: 16px; color: #1e293b; }
         .amount-section { background: linear-gradient(135deg, #f0fdf4, #dcfce7); border: 2px solid #16a34a; border-radius: 10px; padding: 24px; text-align: center; margin: 20px 0; }
         .amount { font-size: 38px; font-weight: 700; color: #15803d; margin-bottom: 12px; }
@@ -31,7 +31,7 @@
         .button { display: inline-block; background: linear-gradient(135deg, #16a34a, #15803d); color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 15px; margin: 24px 0 16px 0; box-shadow: 0 2px 4px rgba(22,163,74,0.2); }
         .button:hover { opacity: 0.95; }
         .footer { text-align: center; padding: 24px; background: #f9fafb; color: #64748b; font-size: 13px; border-top: 1px solid #e2e8f0; }
-        .footer a { color: #16a34a; text-decoration: none; font-weight: 500; }
+        .footer a { color: #24B6C3; text-decoration: none; font-weight: 500; }
         @media (max-width: 480px) { .details-grid { grid-template-columns: 1fr; } .content { padding: 24px 20px; } }
     </style>
 </head>
@@ -39,7 +39,6 @@
     <div class="container">
         <div class="header">
             <h1>🎉 Payout Approved</h1>
-            <div class="subtitle">Your funds are being processed</div>
         </div>
         
         <div class="content">
@@ -110,15 +109,16 @@
             <div style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 8px; margin: 20px 0;">
                 <p style="margin: 0; color: #475569; font-size: 14px;">
                     <strong>📱 View Details:</strong> Login to your account at<br>
-                    <a href="{{agentPortalUrl}}" style="color: #16a34a; text-decoration: none; font-weight: 600;">portal.planettalk.com</a>
+                    <a href="{{agentPortalUrl}}" style="color: #24B6C3; text-decoration: none; font-weight: 600;">portal.planettalk.com</a>
                 </p>
             </div>
         </div>
         
         <div class="footer">
             <p style="margin: 0 0 8px 0;"><strong>Thank you for being part of PlanetTalk!</strong></p>
-            <p style="margin: 0 0 8px 0;">Questions? Email <a href="mailto:agent@planettalk.com">agent@planettalk.com</a></p>
-            <p style="margin: 0;">Best regards, <strong>The PlanetTalk Finance Team</strong></p>
+            <p style="margin: 0 0 8px 0;">Questions? Email <a href="mailto:agent@planettalk.com" style="color: #24B6C3;">agent@planettalk.com</a></p>
+            <p style="margin: 0 0 8px 0;">Best regards, <strong>The PlanetTalk Finance Team</strong></p>
+            <p style="margin: 8px 0 0 0; font-size: 12px; color: #24B6C3;">helping you connect and support your loved ones</p>
         </div>
     </div>
 </body>

@@ -32,14 +32,12 @@ export class EmailService {
     
     const apiKey = this.configService.get('MAILGUN_API_KEY');
     const domain = this.configService.get('MAILGUN_DOMAIN');
-    const fromEmail = this.configService.get('MAILGUN_FROM_EMAIL');
     const apiUrl = this.configService.get('MAILGUN_API_URL') || 'https://api.mailgun.net'; // Default to US
 
     // Debug environment variables (without exposing sensitive data)
     this.logger.debug('📋 Mailgun Configuration Check:');
     this.logger.debug(`   - API Key: ${apiKey ? `✅ Present (${apiKey.substring(0, 8)}...)` : '❌ Missing'}`);
     this.logger.debug(`   - Domain: ${domain ? `✅ ${domain}` : '❌ Missing'}`);
-    this.logger.debug(`   - From Email: ${fromEmail ? `✅ ${fromEmail}` : `📧 Auto-generated`}`);
     this.logger.debug(`   - API URL: ${apiUrl}`);
 
     if (!apiKey || !domain) {
@@ -57,7 +55,8 @@ export class EmailService {
       });
 
       this.domain = domain;
-      this.fromEmail = fromEmail || `Agent Portal <noreply@${domain}>`;
+      // Hardcoded from email for all outgoing emails
+      this.fromEmail = 'PlanetTalk Agent <agent@planettalk.com>';
       
       this.logger.log('✅ Mailgun service initialized successfully');
       this.logger.log(`📧 Ready to send emails from: ${this.fromEmail}`);
@@ -204,7 +203,6 @@ export class EmailService {
           month: 'long',
           day: 'numeric',
         }),
-        subtitle: 'Application Successfully Received',
       },
     });
   }
@@ -237,7 +235,6 @@ export class EmailService {
         agentTier: additionalData?.agentTier || 'Bronze',
         minimumPayout: additionalData?.minimumPayout || 20,
         payoutSchedule: additionalData?.payoutSchedule || 'Weekly',
-        subtitle: 'Welcome to Our Agent Network!',
       },
     });
   }
@@ -259,8 +256,6 @@ export class EmailService {
         email,
         temporaryPassword,
         loginUrl,
-        title: 'Admin Access Granted',
-        subtitle: 'Welcome to the PlanetTalk Admin Portal',
       },
     });
   }
@@ -286,7 +281,6 @@ export class EmailService {
         securityNotice: has2FA 
           ? 'Note: Your account has 2FA enabled. After resetting your password, you will still need your authenticator app to log in.'
           : 'For enhanced security, consider enabling two-factor authentication after resetting your password.',
-        subtitle: 'Password Reset Request',
       },
     });
   }
@@ -322,7 +316,6 @@ export class EmailService {
         dashboardUrl: payoutData.dashboardUrl || (process.env.NODE_ENV === 'production' 
           ? 'https://portal.planettalk.com/en/dashboard'
           : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard')),
-        subtitle: 'Payout Status Update',
       },
     });
   }
@@ -368,7 +361,6 @@ export class EmailService {
         dashboardUrl: process.env.NODE_ENV === 'production' 
           ? 'https://portal.planettalk.com/en/dashboard'
           : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard'),
-        subtitle: `Two-Factor Authentication ${action.charAt(0).toUpperCase() + action.slice(1)}`,
       },
     });
   }
@@ -392,7 +384,6 @@ export class EmailService {
         dashboardUrl: process.env.NODE_ENV === 'production' 
           ? 'https://portal.planettalk.com/en/dashboard'
           : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en/dashboard` : 'http://localhost:3001/en/dashboard'),
-        subtitle: 'Your Login Verification Code',
       },
     });
   }
@@ -416,7 +407,6 @@ export class EmailService {
         portalUrl: process.env.NODE_ENV === 'production' 
           ? 'https://portal.planettalk.com/en'
           : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-        subtitle: 'Email Verification Required',
       },
     });
   }

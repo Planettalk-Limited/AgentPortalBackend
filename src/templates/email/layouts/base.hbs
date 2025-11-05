@@ -10,19 +10,26 @@
             line-height: 1.6;
             color: #333;
             margin: 0;
-            padding: 0;
-            background-color: #f4f4f4;
+            padding: 20px 0;
+            background: linear-gradient(135deg, #e0f7fa 0%, #f0f4f8 100%);
+        }
+        .email-wrapper {
+            max-width: 650px;
+            margin: 0 auto;
+            padding: 10px;
         }
         .email-container {
             max-width: 600px;
             margin: 0 auto;
             background-color: #ffffff;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+            border-radius: 12px;
+            overflow: hidden;
         }
         .header {
-            background: linear-gradient(135deg, #00bcd4 0%, #00acc1 100%);
+            background: #ffffff;
             color: white;
-            padding: 30px 20px;
+            padding: 0;
             text-align: center;
         }
         .header h1 {
@@ -31,13 +38,11 @@
             font-weight: 300;
         }
         .header .subtitle {
-            margin: 5px 0 0 0;
-            font-size: 14px;
-            opacity: 0.9;
+            display: none;
         }
         .content {
             padding: 30px 20px;
-            background: #ffffff;
+            background: #f8fafb;
         }
         .content h2 {
             color: #333;
@@ -63,7 +68,7 @@
         }
         .button {
             display: inline-block;
-            background: linear-gradient(135deg, #00bcd4 0%, #00acc1 100%);
+            background: linear-gradient(135deg, #24B6C3 0%, #00acc1 100%);
             color: white !important;
             padding: 12px 30px;
             text-decoration: none;
@@ -71,12 +76,12 @@
             margin: 20px 0;
             font-weight: 600;
             text-align: center;
-            box-shadow: 0 4px 15px rgba(0,188,212,0.3);
+            box-shadow: 0 4px 15px rgba(36,182,195,0.3);
             transition: all 0.3s ease;
         }
         .button:hover {
             transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,188,212,0.4);
+            box-shadow: 0 6px 20px rgba(36,182,195,0.4);
         }
         .button.success {
             background: linear-gradient(135deg, #28a745 0%, #1e7e34 100%);
@@ -93,7 +98,7 @@
         }
         .info-box {
             background: #e9ecef;
-            border-left: 4px solid #00bcd4;
+            border-left: 4px solid #24B6C3;
             padding: 15px;
             margin: 20px 0;
             border-radius: 4px;
@@ -115,7 +120,7 @@
         }
         .credentials-box {
             background: #f8f9fa;
-            border: 2px solid #00bcd4;
+            border: 2px solid #24B6C3;
             padding: 20px;
             border-radius: 8px;
             margin: 20px 0;
@@ -123,7 +128,7 @@
         }
         .credentials-box h3 {
             margin-top: 0;
-            color: #00bcd4;
+            color: #24B6C3;
         }
         .credential-item {
             margin: 10px 0;
@@ -149,7 +154,7 @@
             margin: 5px 0;
         }
         .footer a {
-            color: #00bcd4;
+            color: #24B6C3;
             text-decoration: none;
         }
         .social-links {
@@ -162,11 +167,18 @@
             text-decoration: none;
         }
         @media (max-width: 600px) {
+            body {
+                padding: 10px 0;
+            }
+            .email-wrapper {
+                padding: 5px;
+            }
             .email-container {
                 width: 100% !important;
                 margin: 0 !important;
+                border-radius: 8px;
             }
-            .header, .content, .footer {
+            .content, .footer {
                 padding: 20px 15px !important;
             }
             .button {
@@ -178,14 +190,16 @@
     </style>
 </head>
 <body>
-    <div class="email-container">
-        {{> header}}
-        
-        <div class="content">
-            {{{body}}}
+    <div class="email-wrapper">
+        <div class="email-container">
+            {{> header}}
+            
+            <div class="content">
+                {{{body}}}
+            </div>
+            
+            {{> footer}}
         </div>
-        
-        {{> footer}}
     </div>
 </body>
 </html>
