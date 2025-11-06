@@ -156,12 +156,12 @@ async function seed() {
     logger.log('🏢 Agents:');
     logger.log('   Email: john.doe@example.com (Gold Tier)');
     logger.log('   Password: agent123');
-    logger.log('   Agent Code: AGT00001');
+    logger.log('   Agent Code: PTA0001');
     logger.log('   Balance: $3,200.50 available');
     logger.log('');
     logger.log('   Email: jane.smith@example.com (Silver Tier)');
     logger.log('   Password: agent123');
-    logger.log('   Agent Code: AGT00002');
+    logger.log('   Agent Code: PTA0002');
     logger.log('   Balance: $1,950.75 available');
     logger.log('');
     logger.log('🔗 Test Referral Codes:');

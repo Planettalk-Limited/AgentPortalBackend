@@ -42,6 +42,8 @@
     "seed:rewards": "node scripts/seed-rewards.js",
     "seed:planettalk": "node scripts/seed-planettalk.js",
     "seed:planettalk:prod": "node scripts/seed-planettalk.js",
+    "seed:production": "npx ts-node src/scripts/seed-production.ts",
+    "seed:production:prod": "node dist/scripts/seed-production.js",
     "db:seed": "npm run seed",
     "migration:generate": "typeorm-ts-node-commonjs migration:generate -d src/config/typeorm.config.ts",
     "migration:run": "typeorm-ts-node-commonjs migration:run -d src/config/typeorm.config.ts",

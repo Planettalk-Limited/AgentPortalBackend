@@ -114,7 +114,7 @@ export class AdminTemplatesController {
       },
       'agent-credentials': {
         firstName: 'John',
-        agentCode: 'AGT12345',
+        agentCode: 'PTA0001',
         temporaryPassword: 'TempPass123',
         loginUrl: 'https://portal.example.com/login',
         commissionRate: 10,

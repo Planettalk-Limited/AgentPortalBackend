@@ -155,7 +155,7 @@ export class BulkUpdateAgentStatsDto {
 
 // Agent Code-based DTOs
 export class UpdateAgentStatsByCodeDto {
-  @ApiProperty({ description: 'Agent Code (e.g., AGT15616)' })
+  @ApiProperty({ description: 'Agent Code (e.g., PTA0001)' })
   @IsString()
   @MaxLength(20)
   agentCode: string;

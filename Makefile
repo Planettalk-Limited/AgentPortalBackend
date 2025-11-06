@@ -28,13 +28,14 @@ help: ## Show this help message
 	@echo "  docker-push     - Push Docker image to registry"
 	@echo ""
 	@echo "Database Commands:"
-	@echo "  migration-run     - Run database migrations"
-	@echo "  migration-create  - Create new migration"
+	@echo "  migration-run       - Run database migrations"
+	@echo "  migration-create    - Create new migration"
 	@echo ""
 	@echo "Admin Setup Commands:"
-	@echo "  setup-admin       - Setup basic admin accounts for testing"
-	@echo "  setup-planettalk  - Setup PlanetTalk diaspora community data"
-	@echo "  setup-complete    - Complete setup (migrations + admin accounts)"
+	@echo "  setup-admin         - Setup basic admin accounts for testing"
+	@echo "  setup-planettalk    - Setup PlanetTalk diaspora community data"
+	@echo "  setup-production    - ⚠️  PRODUCTION SEED (deletes all data!)"
+	@echo "  setup-complete      - Complete setup (migrations + admin accounts)"
 	@echo ""
 	@echo "Container Access Commands:"
 	@echo "  prod-shell      - Open shell in production backend container"
@@ -192,6 +193,32 @@ setup-planettalk: ## Setup PlanetTalk diaspora community data
 	@echo "   PT Admin: maria.santos@planettalk.com / ptadmin123"
 	@echo "   Diaspora Agents: kwame.asante@example.com / agent123"
 	@echo "   More agents available - check container logs for full list"
+
+setup-production: ## ⚠️ PRODUCTION SEED - Deletes all data and creates production accounts
+	@echo "⚠️  ═══════════════════════════════════════════════════════════════"
+	@echo "⚠️  WARNING: This will DELETE ALL data in the database!"
+	@echo "⚠️  ═══════════════════════════════════════════════════════════════"
+	@read -p "   Are you absolutely sure you want to continue? [yes/NO] " -r; \
+	echo ""; \
+	if [[ $$REPLY == "yes" ]]; then \
+		echo "🌱 Running production seed..."; \
+		if docker ps | grep -q agent-backend-prod; then \
+			docker exec agent-backend-prod npm run seed:production:prod; \
+		elif docker ps | grep -q agent-backend-dev; then \
+			docker exec agent-backend-dev npm run seed:production; \
+		else \
+			echo "❌ No running backend container found. Start the environment first."; \
+			exit 1; \
+		fi; \
+		echo ""; \
+		echo "═══════════════════════════════════════════════════════════════"; \
+		echo "✅ Production seed completed!"; \
+		echo "═══════════════════════════════════════════════════════════════"; \
+		echo "⚠️  IMPORTANT: Save the credentials shown above!"; \
+		echo ""; \
+	else \
+		echo "❌ Operation cancelled. No changes made."; \
+	fi
 
 setup-complete: migration-run setup-admin ## Complete setup: migrations + admin accounts
 	@echo "🎉 Complete setup finished!"

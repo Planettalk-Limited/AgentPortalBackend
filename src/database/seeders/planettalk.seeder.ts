@@ -499,7 +499,8 @@ export class PlanetTalkSeeder {
     let isUnique = false;
 
     while (!isUnique) {
-      agentCode = 'AGT' + Math.floor(Math.random() * 90000 + 10000);
+      const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+      agentCode = `PTA${randomNum}`;
       const existing = await this.agentsRepository.findOne({ where: { agentCode } });
       isUnique = !existing;
     }

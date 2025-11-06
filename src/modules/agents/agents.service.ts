@@ -654,12 +654,12 @@ export class AgentsService {
   }
 
   private async generateAgentCode(): Promise<string> {
-    const prefix = 'AGT';
+    const prefix = 'PTA';
     let isUnique = false;
     let agentCode: string;
 
     while (!isUnique) {
-      const randomNum = Math.floor(Math.random() * 100000).toString().padStart(5, '0');
+      const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
       agentCode = `${prefix}${randomNum}`;
       
       const existingAgent = await this.findByAgentCode(agentCode);
