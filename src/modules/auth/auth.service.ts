@@ -71,6 +71,8 @@ export class AuthService {
 
     // Check if this is a first login for a pending user
     const isFirstLoginPendingUser = user.isFirstLogin && user.status === 'pending';
+    // Capture the first login status BEFORE resetting it
+    const isFirstSignIn = user.isFirstLogin === true;
     let approvalData = null;
 
     if (isFirstLoginPendingUser) {
@@ -93,6 +95,7 @@ export class AuthService {
     const baseResponse = {
       success: true,
       emailVerified: true,
+      isFirstSignIn, // Include first sign-in flag for frontend
       access_token: this.jwtService.sign(payload),
       user: {
         id: user.id,
@@ -572,6 +575,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid 2FA verification code');
     }
 
+    // Capture the first sign-in status BEFORE resetting it
+    const isFirstSignIn = user.isFirstLogin === true;
+
     // Generate JWT token after successful 2FA verification
     const payload: JwtPayload = { 
       email: user.email, 
@@ -588,6 +594,8 @@ export class AuthService {
     });
 
     return {
+      success: true,
+      isFirstSignIn, // Include first sign-in flag for frontend
       access_token: token,
       user: {
         id: user.id,
@@ -640,7 +648,7 @@ export class AuthService {
     }
   }
 
-  async verifyOTP(email: string, otp: string): Promise<{ success: boolean; message: string; access_token?: string; user?: any }> {
+  async verifyOTP(email: string, otp: string): Promise<{ success: boolean; message: string; isFirstSignIn?: boolean; access_token?: string; user?: any }> {
     try {
       const user = await this.usersService.findByEmail(email);
       if (!user) {
@@ -663,6 +671,9 @@ export class AuthService {
       if (storedOTP !== otp) {
         return { success: false, message: 'Invalid OTP code' };
       }
+
+      // Capture the first sign-in status BEFORE resetting it
+      const isFirstSignIn = user.isFirstLogin === true;
 
       // Clear OTP from metadata
       await this.usersService.update(user.id, {
@@ -687,6 +698,7 @@ export class AuthService {
       return {
         success: true,
         message: 'Login successful',
+        isFirstSignIn, // Include first sign-in flag for frontend
         access_token: token,
         user: {
           id: user.id,
