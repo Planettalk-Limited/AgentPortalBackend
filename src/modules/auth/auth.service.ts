@@ -838,9 +838,10 @@ export class AuthService {
 
           await this.emailService.sendEmail({
             to: user.email,
-            subject: 'Welcome to PlanetTalk Agent Program - Account Activated!',
+            subject: `Welcome, ${user.firstName}! Your PlanetTalk Agent Journey Begins 🎉`,
             template: 'agent-credentials',
             templateData: emailData,
+            previewText: "You're officially part of the PlanetTalk community, start earning and connecting today.",
           });
         }
       } catch (error) {

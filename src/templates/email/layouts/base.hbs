@@ -190,6 +190,14 @@
     </style>
 </head>
 <body>
+    {{#if previewText}}
+    <div style="display: none; max-height: 0px; overflow: hidden;">
+        {{previewText}}
+    </div>
+    <div style="display: none; max-height: 0px; overflow: hidden;">
+        &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;
+    </div>
+    {{/if}}
     <div class="email-wrapper">
         <div class="email-container">
             {{> header}}

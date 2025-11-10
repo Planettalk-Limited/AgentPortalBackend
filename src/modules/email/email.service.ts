@@ -11,6 +11,7 @@ export interface EmailOptions {
   text?: string;
   template?: string;
   templateData?: TemplateData;
+  previewText?: string;
 }
 
 @Injectable()
@@ -109,6 +110,7 @@ export class EmailService {
         html = await this.templateService.renderTemplate(options.template, {
           ...options.templateData,
           title: options.subject,
+          previewText: options.previewText,
         });
         
         const templateTime = Date.now() - templateStart;
