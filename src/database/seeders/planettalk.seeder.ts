@@ -495,16 +495,36 @@ export class PlanetTalkSeeder {
   }
 
   private async generateAgentCode(): Promise<string> {
-    let agentCode: string;
-    let isUnique = false;
+    const prefix = 'PTA';
+    const minCode = 1;
+    const maxCode = 205;
 
-    while (!isUnique) {
-      const randomNum = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-      agentCode = `PTA${randomNum}`;
-      const existing = await this.agentsRepository.findOne({ where: { agentCode } });
-      isUnique = !existing;
+    // Get all existing agent codes in the range PTA0001-PTA0205
+    const existingAgents = await this.agentsRepository
+      .createQueryBuilder('agent')
+      .select('agent.agentCode')
+      .where('agent.agentCode LIKE :prefix', { prefix: `${prefix}%` })
+      .andWhere(`CAST(SUBSTRING(agent.agentCode FROM 4) AS INTEGER) BETWEEN :min AND :max`, { 
+        min: minCode, 
+        max: maxCode 
+      })
+      .getMany();
+
+    // Create a set of existing codes for fast lookup
+    const existingCodes = new Set(existingAgents.map(agent => agent.agentCode));
+
+    // Find the first available code in the range
+    for (let i = minCode; i <= maxCode; i++) {
+      const agentCode = `${prefix}${i.toString().padStart(4, '0')}`;
+      
+      if (!existingCodes.has(agentCode)) {
+        return agentCode;
+      }
     }
 
-    return agentCode;
+    // If we get here, all codes in the range are used
+    throw new Error(
+      `All agent codes in the range ${prefix}${minCode.toString().padStart(4, '0')} to ${prefix}${maxCode.toString().padStart(4, '0')} have been assigned.`
+    );
   }
 }
