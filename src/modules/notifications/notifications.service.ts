@@ -164,15 +164,16 @@ export class NotificationsService {
   // Email notification sending
   private async sendEmailNotification(user: User, notification: Notification): Promise<void> {
     try {
+      const forceSendEmail = notification.metadata?.forceSendEmail === true;
       // Check if user has email notifications enabled (from metadata)
-      const globalEmailEnabled = user.metadata?.emailNotifications !== false;
+      const globalEmailEnabled = forceSendEmail ? true : user.metadata?.emailNotifications !== false;
       
       if (!globalEmailEnabled) {
         return; // Skip email if global email notifications disabled
       }
 
       // Check specific notification type preferences
-      const typeSpecificEnabled = this.isNotificationTypeEnabled(user, notification.type);
+      const typeSpecificEnabled = forceSendEmail ? true : this.isNotificationTypeEnabled(user, notification.type);
       if (!typeSpecificEnabled) {
         return; // Skip email if this specific notification type is disabled
       }

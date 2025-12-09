@@ -2795,7 +2795,7 @@ export class AgentsService {
             processedReferenceIds.add(earningEntry.referenceId);
           }
 
-          // Create earning record
+          // Create earning record (always confirmed)
           const earning = this.earningsRepository.create({
             agentId: agent.id,
             type: earningEntry.type,
@@ -2805,8 +2805,8 @@ export class AgentsService {
             description: earningEntry.description,
             referenceId: earningEntry.referenceId,
             earnedAt: earningEntry.earnedAt ? new Date(earningEntry.earnedAt) : new Date(),
-            status: bulkUploadDto.autoConfirm ? EarningStatus.CONFIRMED : EarningStatus.PENDING,
-            confirmedAt: bulkUploadDto.autoConfirm ? new Date() : null,
+            status: EarningStatus.CONFIRMED,
+            confirmedAt: new Date(),
             metadata: {
               batchId,
               batchDescription: bulkUploadDto.batchDescription,
@@ -2818,24 +2818,22 @@ export class AgentsService {
 
           const savedEarning = await this.earningsRepository.save(earning);
           
-          // Track agent for balance update (only if confirmed)
-          if (bulkUploadDto.autoConfirm) {
-            if (agentBalanceUpdates.has(agent.id)) {
-              const update = agentBalanceUpdates.get(agent.id)!;
-              update.totalEarnings += earningEntry.amount;
-              update.count++;
-            } else {
-              agentBalanceUpdates.set(agent.id, {
-                agent,
-                totalEarnings: earningEntry.amount,
-                count: 1,
-              });
-            }
+          // Track agent for balance update (always, since we auto-confirm)
+          if (agentBalanceUpdates.has(agent.id)) {
+            const update = agentBalanceUpdates.get(agent.id)!;
+            update.totalEarnings += earningEntry.amount;
+            update.count++;
+          } else {
+            agentBalanceUpdates.set(agent.id, {
+              agent,
+              totalEarnings: earningEntry.amount,
+              count: 1,
+            });
           }
 
           detailResult.status = 'success';
           detailResult.earningId = savedEarning.id;
-          detailResult.message = bulkUploadDto.autoConfirm ? 'Earning created and confirmed' : 'Earning created (pending approval)';
+          detailResult.message = 'Earning created and confirmed';
           result.details.push(detailResult);
           result.successful++;
           result.totalAmount += earningEntry.amount;
@@ -2848,8 +2846,8 @@ export class AgentsService {
         }
       }
 
-      // Third pass: recalculate balances for affected agents if auto-confirm is enabled
-      if (bulkUploadDto.autoConfirm && agentBalanceUpdates.size > 0) {
+      // Third pass: recalculate balances for affected agents (always auto-confirmed)
+      if (agentBalanceUpdates.size > 0) {
         for (const [agentId, update] of agentBalanceUpdates) {
           try {
             // Recalculate balances from database to ensure accuracy
@@ -2867,6 +2865,10 @@ export class AgentsService {
                 priority: NotificationPriority.MEDIUM,
                 actionUrl: `/earnings`,
                 actionText: 'View Earnings',
+                metadata: {
+                  forceSendEmail: true,
+                  batchId,
+                },
               });
             }
           } catch (error) {
@@ -2926,6 +2928,9 @@ export class AgentsService {
             continue;
           }
 
+          // Capture current totals for delta computation
+          const previousTotalEarnings = Number(agent.totalEarnings) || 0;
+
           // Update agent data
           const updateData: any = {};
           const updatedFields: string[] = [];
@@ -2935,21 +2940,11 @@ export class AgentsService {
             updatedFields.push('totalEarnings');
           }
 
-          // Auto-calculate availableBalance if not provided
-          // Formula: availableBalance = totalEarnings - totalPayoutAmount
-          if (agentData.availableBalance !== undefined) {
-            updateData.availableBalance = agentData.availableBalance;
-            updatedFields.push('availableBalance');
-          } else if (agentData.totalEarnings !== undefined && agentData.totalPayoutAmount !== undefined) {
-            // Calculate automatically
-            updateData.availableBalance = Number(agentData.totalEarnings) - Number(agentData.totalPayoutAmount);
-            updatedFields.push('availableBalance (calculated)');
-          } else if (agentData.totalEarnings !== undefined) {
-            // If no totalPayoutAmount, use agent's existing or assume 0
-            const totalPayout = agentData.totalPayoutAmount || agent.metadata?.totalPayoutAmount || 0;
-            updateData.availableBalance = Number(agentData.totalEarnings) - Number(totalPayout);
-            updatedFields.push('availableBalance (calculated)');
-          }
+          // Always calculate availableBalance server-side to avoid bad parsed values
+          const totalEarningsValue = agentData.totalEarnings ?? agent.totalEarnings ?? 0;
+          const totalPayoutValue = agentData.totalPayoutAmount ?? agent.metadata?.totalPayoutAmount ?? 0;
+          updateData.availableBalance = Number(totalEarningsValue) - Number(totalPayoutValue);
+          updatedFields.push('availableBalance (calculated)');
 
           if (agentData.totalReferrals !== undefined) {
             updateData.totalReferrals = agentData.totalReferrals;
@@ -2989,6 +2984,35 @@ export class AgentsService {
 
           // Update agent
           await this.agentsRepository.update(agent.id, updateData);
+
+          // Create a confirmed earning record for the delta so metrics reflect the upload
+          const newTotalEarnings = Number(updateData.totalEarnings ?? previousTotalEarnings);
+          const earningsDelta = newTotalEarnings - previousTotalEarnings;
+
+          if (earningsDelta !== 0) {
+            const earnedAtDate = metadata.dataMonth
+              ? new Date(`${metadata.dataMonth}-01T00:00:00Z`)
+              : new Date();
+
+            const deltaEarning = this.earningsRepository.create({
+              agentId: agent.id,
+              type: earningsDelta >= 0 ? EarningType.BONUS : EarningType.ADJUSTMENT,
+              amount: Math.abs(earningsDelta),
+              currency: agent.metadata?.currency || 'USD',
+              description: `Bulk data upload (${metadata.dataMonth || 'current period'})`,
+              earnedAt: earnedAtDate,
+              status: EarningStatus.CONFIRMED,
+              confirmedAt: new Date(),
+              metadata: {
+                batchId,
+                source: 'bulk-data-upload',
+                availableMonth: metadata.dataMonth,
+              },
+            });
+
+            await this.earningsRepository.save(deltaEarning);
+            updatedFields.push('earningRecordCreated');
+          }
 
           detailResult.status = 'success';
           detailResult.message = `Agent data updated successfully`;
