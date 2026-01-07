@@ -2985,33 +2985,91 @@ export class AgentsService {
           // Update agent
           await this.agentsRepository.update(agent.id, updateData);
 
-          // Create a confirmed earning record for the delta so metrics reflect the upload
-          const newTotalEarnings = Number(updateData.totalEarnings ?? previousTotalEarnings);
-          const earningsDelta = newTotalEarnings - previousTotalEarnings;
+          // Determine the earning amount to record
+          // Use earningsForCurrentMonth if provided, otherwise calculate from totalEarnings delta
+          const periodEarningAmount = agentData.earningsForCurrentMonth !== undefined 
+            ? Number(agentData.earningsForCurrentMonth)
+            : Number(updateData.totalEarnings ?? previousTotalEarnings) - previousTotalEarnings;
 
-          if (earningsDelta !== 0) {
-            const earnedAtDate = metadata.dataMonth
-              ? new Date(`${metadata.dataMonth}-01T00:00:00Z`)
-              : new Date();
+          const earnedAtDate = metadata.dataMonth
+            ? new Date(`${metadata.dataMonth}-01T00:00:00Z`)
+            : new Date();
 
-            const deltaEarning = this.earningsRepository.create({
-              agentId: agent.id,
-              type: earningsDelta >= 0 ? EarningType.BONUS : EarningType.ADJUSTMENT,
-              amount: Math.abs(earningsDelta),
-              currency: agent.metadata?.currency || 'USD',
-              description: `Bulk data upload (${metadata.dataMonth || 'current period'})`,
-              earnedAt: earnedAtDate,
-              status: EarningStatus.CONFIRMED,
-              confirmedAt: new Date(),
-              metadata: {
-                batchId,
+          // Check if an earning record from bulk upload already exists for this agent in this period
+          // This prevents duplicate records when uploading the same data multiple times
+          let existingPeriodEarning = null;
+          
+          if (metadata.dataMonth) {
+            // If we have a specific month, look for existing records for this agent + month
+            const periodEarnings = await this.earningsRepository
+              .createQueryBuilder('earning')
+              .where('earning.agentId = :agentId', { agentId: agent.id })
+              .andWhere("earning.metadata->>'source' = :source", { source: 'bulk-data-upload' })
+              .andWhere("earning.metadata->>'availableMonth' = :month", { month: metadata.dataMonth })
+              .getMany();
+            
+            existingPeriodEarning = periodEarnings.length > 0 ? periodEarnings[0] : null;
+          }
+
+          if (existingPeriodEarning) {
+            // Update the existing period record with the new amount from the upload
+            const oldAmount = Number(existingPeriodEarning.amount);
+            const newAmount = Math.abs(periodEarningAmount);
+            
+            // Only update if there's an actual change in amount
+            if (newAmount !== oldAmount) {
+              existingPeriodEarning.amount = newAmount;
+              existingPeriodEarning.type = periodEarningAmount >= 0 ? EarningType.BONUS : EarningType.ADJUSTMENT;
+              existingPeriodEarning.earnedAt = earnedAtDate;
+              existingPeriodEarning.metadata = {
+                ...existingPeriodEarning.metadata,
+                batchId, // Update with new batchId
                 source: 'bulk-data-upload',
                 availableMonth: metadata.dataMonth,
-              },
-            });
+                updatedAt: new Date().toISOString(),
+                previousAmount: oldAmount,
+                updateCount: (existingPeriodEarning.metadata?.updateCount || 0) + 1,
+              };
+              
+              await this.earningsRepository.save(existingPeriodEarning);
+              updatedFields.push(`earningRecordUpdated (${oldAmount} -> ${newAmount})`);
+            } else {
+              // Even if amount hasn't changed, update the batchId for audit trail
+              existingPeriodEarning.metadata = {
+                ...existingPeriodEarning.metadata,
+                batchId,
+                lastVerifiedAt: new Date().toISOString(),
+                verifyCount: (existingPeriodEarning.metadata?.verifyCount || 0) + 1,
+              };
+              await this.earningsRepository.save(existingPeriodEarning);
+              updatedFields.push('earningRecordVerified (no change)');
+            }
+          } else {
+            // Create new record for this period if amount > 0
+            if (periodEarningAmount > 0) {
+              const deltaEarning = this.earningsRepository.create({
+                agentId: agent.id,
+                type: periodEarningAmount >= 0 ? EarningType.BONUS : EarningType.ADJUSTMENT,
+                amount: Math.abs(periodEarningAmount),
+                currency: agent.metadata?.currency || 'USD',
+                description: `Bulk data upload (${metadata.dataMonth || 'current period'})`,
+                earnedAt: earnedAtDate,
+                status: EarningStatus.CONFIRMED,
+                confirmedAt: new Date(),
+                metadata: {
+                  batchId,
+                  source: 'bulk-data-upload',
+                  availableMonth: metadata.dataMonth,
+                  createdAt: new Date().toISOString(),
+                  periodEarnings: agentData.earningsForCurrentMonth,
+                },
+              });
 
-            await this.earningsRepository.save(deltaEarning);
-            updatedFields.push('earningRecordCreated');
+              await this.earningsRepository.save(deltaEarning);
+              updatedFields.push('earningRecordCreated');
+            } else {
+              updatedFields.push('noPeriodEarnings (skipped record creation)');
+            }
           }
 
           detailResult.status = 'success';
