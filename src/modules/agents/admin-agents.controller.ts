@@ -29,12 +29,14 @@ export class AdminAgentsController {
   getAllAgents(
     @Query('status') status?: string,
     @Query('tier') tier?: string,
+    @Query('partnerType') partnerType?: string,
     @Query('page') page?: number,
     @Query('limit') limit?: number,
   ) {
     return this.agentsService.findAll({
       status,
       tier,
+      partnerType,
       page,
       limit,
     });

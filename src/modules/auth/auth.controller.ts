@@ -78,6 +78,10 @@ export class AuthController {
     if ('requiresEmailVerification' in loginResult && loginResult.requiresEmailVerification) {
       return loginResult;
     }
+
+    if ('requiresPartnerApproval' in loginResult && loginResult.requiresPartnerApproval) {
+      return loginResult;
+    }
     
     // If login was successful but user has 2FA enabled, check for 2FA requirement
     if ('success' in loginResult && loginResult.success) {
@@ -104,9 +108,12 @@ export class AuthController {
   }
 
   @Post('register')
-  @ApiOperation({ summary: 'User registration with automatic referral setup' })
+  @ApiOperation({
+    summary:
+      'Partner registration — individual (pending agent + auto code) or business (no code until admin approval)',
+  })
   @ApiBody({ type: RegisterDto })
-  @ApiResponse({ status: 201, description: 'User registered successfully with referral data' })
+  @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 400, description: 'Registration failed' })
   async register(@Body() registerDto: RegisterDto) {
     return this.usersService.register(registerDto);

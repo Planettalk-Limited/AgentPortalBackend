@@ -69,6 +69,59 @@ export class AuthService {
       };
     }
 
+    if (user.status === UserStatus.AWAITING_PARTNER_APPROVAL) {
+      // Self-healing: if the user already has an active agent they were previously
+      // approved. Their status was corrupted (e.g. by a stale email OTP). Restore
+      // them to active so they can log in without manual intervention.
+      const existingAgents = await this.usersService.getUserAgents(user.id);
+      const hasActiveAgent = existingAgents?.some((a: any) => a.status === 'active');
+
+      if (hasActiveAgent) {
+        await this.usersService.update(user.id, {
+          status: UserStatus.ACTIVE,
+          metadata: {
+            ...user.metadata,
+            statusRestoredAt: new Date().toISOString(),
+            statusRestoredReason: 'auto_recovery_active_agent_exists',
+          },
+        });
+        // Fall through — the user will be authenticated normally below
+      } else {
+        return {
+          success: false,
+          requiresPartnerApproval: true,
+          emailVerified: !!user.emailVerifiedAt,
+          message:
+            'Your business partner application is awaiting administrator approval. You will receive an email once your account is active.',
+          email: user.email,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            status: user.status,
+          },
+        };
+      }
+    }
+
+    if (user.status === UserStatus.REJECTED) {
+      return {
+        success: false,
+        rejected: true,
+        message:
+          'Your partner application has been reviewed and was not approved. Please check your email for details, or contact support.',
+        email: user.email,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          status: user.status,
+        },
+      };
+    }
+
     // Check if this is a first login for a pending user
     const isFirstLoginPendingUser = user.isFirstLogin && user.status === 'pending';
     // Capture the first login status BEFORE resetting it
@@ -134,6 +187,16 @@ export class AuthService {
     const user = await this.usersService.findById(payload.sub);
     if (!user) {
       throw new UnauthorizedException('User not found');
+    }
+    if (user.status === UserStatus.AWAITING_PARTNER_APPROVAL) {
+      throw new UnauthorizedException(
+        'Partner account is pending administrator approval',
+      );
+    }
+    if (user.status === UserStatus.REJECTED) {
+      throw new UnauthorizedException(
+        'Partner application has been rejected',
+      );
     }
     return user;
   }
@@ -749,11 +812,14 @@ export class AuthService {
         },
       });
 
-      // Send verification email
+      const partnerType =
+        user.metadata?.partnerType === 'business' ? 'business' : 'individual';
+
       const emailSent = await this.emailService.sendEmailVerificationOTP(
         user.email,
         user.firstName,
-        otp
+        otp,
+        partnerType,
       );
 
       return {
@@ -771,7 +837,10 @@ export class AuthService {
   /**
    * Verify email using OTP code
    */
-  async verifyEmailOTP(email: string, otp: string): Promise<{ success: boolean; message: string; user?: any }> {
+  async verifyEmailOTP(
+    email: string,
+    otp: string,
+  ): Promise<Record<string, any>> {
     try {
       const user = await this.usersService.findByEmail(email);
       if (!user) {
@@ -800,7 +869,74 @@ export class AuthService {
         return { success: false, message: 'Invalid verification code' };
       }
 
-      // Mark email as verified and activate user
+      const isBusinessPartner = user.metadata?.partnerType === 'business';
+      const isAlreadyActive = user.status === UserStatus.ACTIVE;
+      const meetingBookingUrl = this.usersService.getPartnerMeetingBookingUrl();
+
+      if (isBusinessPartner) {
+        // If already approved and active, just clear the stale OTP — never downgrade status
+        const newStatus = isAlreadyActive
+          ? UserStatus.ACTIVE
+          : UserStatus.AWAITING_PARTNER_APPROVAL;
+
+        await this.usersService.update(user.id, {
+          emailVerifiedAt: new Date(),
+          status: newStatus,
+          metadata: {
+            ...user.metadata,
+            emailVerificationOTP: null,
+            emailVerificationOTPExpiry: null,
+            emailVerifiedAt: new Date().toISOString(),
+          },
+        });
+
+        if (isAlreadyActive) {
+          // Partner is already approved — treat exactly like a successful individual verification
+          return {
+            success: true,
+            requiresPartnerApproval: false,
+            message: 'Email verified successfully. You can now log in.',
+            user: {
+              id: user.id,
+              email: user.email,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              status: UserStatus.ACTIVE,
+              emailVerified: true,
+            },
+          };
+        }
+
+        try {
+          await this.emailService.sendBusinessPartnerEmailVerifiedConfirmation(
+            user.email,
+            user.firstName,
+            meetingBookingUrl,
+          );
+        } catch (error) {
+          console.error(
+            'Failed to send business partner confirmation email:',
+            error,
+          );
+        }
+
+        return {
+          success: true,
+          requiresPartnerApproval: true,
+          message:
+            'Email verified. Your business partner application is awaiting administrator approval.',
+          meetingBookingUrl,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            status: UserStatus.AWAITING_PARTNER_APPROVAL,
+            emailVerified: true,
+          },
+        };
+      }
+
       await this.usersService.update(user.id, {
         emailVerifiedAt: new Date(),
         status: UserStatus.ACTIVE,
@@ -812,23 +948,21 @@ export class AuthService {
         },
       });
 
-      // Send welcome email with agent code after successful verification
       try {
         const agents = await this.usersService.getUserAgents(user.id);
         if (agents && agents.length > 0) {
-          const agent = agents[0]; // Get the first agent
-          
-          // Send agent welcome email with credentials and agent code
+          const agent = agents[0];
+
           const emailData = {
             firstName: user.firstName,
             lastName: user.lastName,
             fullName: `${user.firstName} ${user.lastName}`,
             email: user.email,
-            username: user.email, // Email is the username
+            username: user.email,
             agentCode: agent.agentCode,
             commissionRate: agent.commissionRate.toString(),
             tier: agent.tier,
-            minimumPayout: '20', // Default minimum payout
+            minimumPayout: '20',
             payoutProcessing: 'Monthly on the 15th',
             loginUrl: process.env.NODE_ENV === 'production' 
               ? 'https://portal.planettalk.com/en'
@@ -836,22 +970,16 @@ export class AuthService {
             supportEmail: 'agent@planettalk.com',
           };
 
-          await this.emailService.sendEmail({
-            to: user.email,
-            subject: `Welcome, ${user.firstName}! Your PlanetTalk Agent Journey Begins 🎉`,
-            template: 'agent-credentials',
-            templateData: emailData,
-            previewText: "You're officially part of the PlanetTalk community, start earning and connecting today.",
-          });
+          await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
         }
       } catch (error) {
         console.error('Failed to send welcome email after verification:', error);
-        // Don't fail the verification if email fails
       }
 
       return {
         success: true,
-        message: 'Email verified successfully! Your account is now active and your agent credentials have been sent to your email.',
+        message: 'Email verified successfully! Your account is now active and your partner credentials have been sent to your email.',
+        meetingBookingUrl,
         user: {
           id: user.id,
           email: user.email,

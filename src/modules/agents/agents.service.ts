@@ -152,10 +152,11 @@ export class AgentsService {
   async findAll(filters?: {
     status?: string;
     tier?: string;
+    partnerType?: string;
     page?: number;
     limit?: number;
   }): Promise<any> {
-    const { status, tier } = filters || {};
+    const { status, tier, partnerType } = filters || {};
     const page = Number(filters?.page) || 1;
     const limit = Number(filters?.limit) || 20;
 
@@ -168,6 +169,15 @@ export class AgentsService {
 
     if (tier) {
       queryBuilder.andWhere('agent.tier = :tier', { tier });
+    }
+
+    if (partnerType === 'business') {
+      queryBuilder.andWhere(`"user".metadata->>'partnerType' = :partnerType`, { partnerType });
+    } else if (partnerType === 'individual') {
+      // Individual partners: either explicitly set, or no partnerType (default type)
+      queryBuilder.andWhere(
+        `("user".metadata->>'partnerType' = 'individual' OR "user".metadata IS NULL OR "user".metadata->>'partnerType' IS NULL)`,
+      );
     }
 
     const total = await queryBuilder.getCount();
@@ -796,6 +806,67 @@ export class AgentsService {
   }
 
   /**
+   * Create an active partner profile with an admin-assigned code (e.g. business partners).
+   * Does not use sequential PTA auto-generation.
+   */
+  async createPartnerWithAssignedCode(
+    userId: string,
+    partnerCode: string,
+  ): Promise<Agent> {
+    const normalized = partnerCode.trim().toUpperCase();
+    if (normalized.length < 3 || normalized.length > 40) {
+      throw new BadRequestException(
+        'Partner code must be between 3 and 40 characters',
+      );
+    }
+    if (!/^[A-Z0-9][A-Z0-9_-]*$/.test(normalized)) {
+      throw new BadRequestException('Invalid partner code format');
+    }
+
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const existingByCode = await this.agentsRepository.findOne({
+      where: { agentCode: normalized },
+    });
+    if (existingByCode) {
+      throw new BadRequestException(
+        `Partner code ${normalized} is already in use`,
+      );
+    }
+
+    const existingForUser = await this.agentsRepository.findOne({
+      where: { userId },
+    });
+    if (existingForUser) {
+      throw new BadRequestException('This user already has a partner profile');
+    }
+
+    const agent = this.agentsRepository.create({
+      userId,
+      agentCode: normalized,
+      status: AgentStatus.ACTIVE,
+      tier: AgentTier.BRONZE,
+      totalEarnings: 0,
+      availableBalance: 0,
+      pendingBalance: 0,
+      totalReferrals: 0,
+      activeReferrals: 0,
+      commissionRate: 10.0,
+      activatedAt: new Date(),
+      lastActivityAt: new Date(),
+      metadata: {
+        partnerCodeAssignedByAdmin: true,
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    return this.agentsRepository.save(agent);
+  }
+
+  /**
    * Activate agent on first successful login
    */
   async activateAgentOnFirstLogin(user: User): Promise<any> {
@@ -887,13 +958,7 @@ export class AgentsService {
       supportEmail: 'agent@planettalk.com',
     };
 
-    await this.emailService.sendEmail({
-      to: user.email,
-      subject: `Welcome, ${user.firstName}! Your PlanetTalk Agent Journey Begins 🎉`,
-      template: 'agent-credentials',
-      templateData: emailData,
-      previewText: "You're officially part of the PlanetTalk community, start earning and connecting today.",
-    });
+    await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
 
     console.log(`Welcome email sent to ${user.email} for agent ${agent.agentCode}`);
   }
@@ -1096,6 +1161,28 @@ export class AgentsService {
     }
 
     await this.agentsRepository.save(agent);
+
+    // Notify the agent about the adjustment
+    if (agent.user) {
+      const isCredit = createAdjustmentDto.amount > 0;
+      const formattedAmount = `$${Math.abs(createAdjustmentDto.amount).toFixed(2)}`;
+      try {
+        await this.notificationsService.createNotification({
+          userId: agent.user.id,
+          type: NotificationType.EARNINGS,
+          title: isCredit ? 'Earnings Adjustment — Credit' : 'Earnings Adjustment — Debit',
+          message: isCredit
+            ? `A credit of ${formattedAmount} has been applied to your account. Reason: ${createAdjustmentDto.reason}`
+            : `A deduction of ${formattedAmount} has been applied to your account. Reason: ${createAdjustmentDto.reason}`,
+          priority: NotificationPriority.MEDIUM,
+          actionUrl: `/earnings`,
+          actionText: 'View Earnings',
+          metadata: { forceSendEmail: true },
+        });
+      } catch (notifError) {
+        console.error(`Failed to send adjustment notification to agent ${agentId}:`, notifError);
+      }
+    }
 
     return savedEarning;
   }
@@ -2236,6 +2323,24 @@ export class AgentsService {
     // Recalculate agent balances from database to ensure accuracy
     await this.recalculateAgentBalances(earning.agent.id);
 
+    // Notify the agent that their earning was approved
+    if (earning.agent?.user) {
+      try {
+        await this.notificationsService.createNotification({
+          userId: earning.agent.user.id,
+          type: NotificationType.EARNINGS,
+          title: 'Earning Approved',
+          message: `Your earning of $${Number(earning.amount).toFixed(2)} has been approved and added to your balance.`,
+          priority: NotificationPriority.MEDIUM,
+          actionUrl: `/earnings`,
+          actionText: 'View Earnings',
+          metadata: { forceSendEmail: true },
+        });
+      } catch (notifError) {
+        console.error(`Failed to send approval notification for earning ${earningId}:`, notifError);
+      }
+    }
+
     return {
       success: true,
       id: earning.id,
@@ -2272,6 +2377,24 @@ export class AgentsService {
     };
 
     await this.earningsRepository.save(earning);
+
+    // Notify the agent that their earning was rejected
+    if (earning.agent?.user) {
+      try {
+        await this.notificationsService.createNotification({
+          userId: earning.agent.user.id,
+          type: NotificationType.EARNINGS,
+          title: 'Earning Rejected',
+          message: `Your earning of $${Number(earning.amount).toFixed(2)} has been rejected. Reason: ${reason}`,
+          priority: NotificationPriority.HIGH,
+          actionUrl: `/earnings`,
+          actionText: 'View Earnings',
+          metadata: { forceSendEmail: true },
+        });
+      } catch (notifError) {
+        console.error(`Failed to send rejection notification for earning ${earningId}:`, notifError);
+      }
+    }
 
     return {
       success: true,
@@ -2916,9 +3039,10 @@ export class AgentsService {
         };
 
         try {
-          // Find agent by agent code
+          // Find agent by agent code (include user relation for notifications)
           const agent = await this.agentsRepository.findOne({
             where: { agentCode: agentData.agentCode },
+            relations: ['user'],
           });
 
           if (!agent) {
@@ -3069,6 +3193,28 @@ export class AgentsService {
               updatedFields.push('earningRecordCreated');
             } else {
               updatedFields.push('noPeriodEarnings (skipped record creation)');
+            }
+          }
+
+          // Notify agent about earnings data update
+          if (agent.user && periodEarningAmount > 0) {
+            try {
+              await this.notificationsService.createNotification({
+                userId: agent.user.id,
+                type: NotificationType.EARNINGS,
+                title: 'Earnings Updated',
+                message: `Your earnings have been updated. $${periodEarningAmount.toFixed(2)} recorded for ${metadata.dataMonth || 'the current period'}.`,
+                priority: NotificationPriority.MEDIUM,
+                actionUrl: `/earnings`,
+                actionText: 'View Earnings',
+                metadata: {
+                  forceSendEmail: true,
+                  batchId,
+                  source: 'bulk-data-upload',
+                },
+              });
+            } catch (notifError) {
+              console.error(`Failed to send notification to agent ${agentData.agentCode}:`, notifError);
             }
           }
 

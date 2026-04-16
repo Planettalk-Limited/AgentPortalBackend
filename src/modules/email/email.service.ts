@@ -90,6 +90,81 @@ export class EmailService {
     }
   }
 
+  /** Base URL for partner portal (localisation /en path). */
+  getPartnerPortalBaseUrl(): string {
+    if (process.env.NODE_ENV === 'production') {
+      return 'https://portal.planettalk.com/en';
+    }
+    const fe = this.configService.get<string>('FRONTEND_URL');
+    return fe ? `${fe}/en` : 'http://localhost:3001/en';
+  }
+
+  async sendIndividualPartnerRegistrationAcknowledgement(
+    email: string,
+    firstName: string,
+    portalUrl?: string,
+  ): Promise<boolean> {
+    const subject = `${firstName}, we received your individual partner registration`;
+    const base = portalUrl ?? this.getPartnerPortalBaseUrl();
+    return this.sendEmail({
+      to: email,
+      subject,
+      template: 'individual-partner-registration-acknowledgement',
+      templateData: { firstName, portalUrl: base },
+      previewText: 'Next: verify your email with the code we send in a separate message.',
+    });
+  }
+
+  async sendBusinessPartnerRegistrationAcknowledgement(
+    email: string,
+    firstName: string,
+    companyName: string,
+    meetingBookingUrl: string,
+    portalUrl?: string,
+  ): Promise<boolean> {
+    const subject = `${firstName}, we received the partner application for ${companyName}`;
+    const base = portalUrl ?? this.getPartnerPortalBaseUrl();
+    return this.sendEmail({
+      to: email,
+      subject,
+      template: 'business-partner-registration-acknowledgement',
+      templateData: {
+        firstName,
+        companyName,
+        meetingBookingUrl,
+        portalUrl: base,
+      },
+      previewText:
+        "Verify your email next. Your organisation's account activates after our team approves it.",
+    });
+  }
+
+  async sendIndividualPartnerWelcomeEmail(
+    templateData: Record<string, any>,
+  ): Promise<boolean> {
+    return this.sendEmail({
+      to: templateData.email,
+      subject: `${templateData.firstName}, your PlanetTalk partner account is ready`,
+      template: 'individual-partner-welcome',
+      templateData,
+      previewText:
+        'Log in with your email, share your partner code, and track your earnings.',
+    });
+  }
+
+  async sendBusinessPartnerWelcomeEmail(
+    templateData: Record<string, any>,
+  ): Promise<boolean> {
+    return this.sendEmail({
+      to: templateData.email,
+      subject: `${templateData.companyName} is approved — welcome to PlanetTalk Partners`,
+      template: 'business-partner-welcome',
+      templateData,
+      previewText:
+        "Your organisation's partner code is ready. Log in to complete onboarding.",
+    });
+  }
+
   async sendEmail(options: EmailOptions): Promise<boolean> {
     const startTime = Date.now();
     const emailId = `email_${startTime}_${Math.random().toString(36).substr(2, 9)}`;
@@ -393,22 +468,159 @@ export class EmailService {
   async sendEmailVerificationOTP(
     email: string,
     firstName: string,
-    otp: string
+    otp: string,
+    partnerType: 'individual' | 'business' = 'individual',
   ): Promise<boolean> {
-    const subject = 'Verify Your Email to Activate Your Agent Account';
+    const portalUrl = this.getPartnerPortalBaseUrl();
+    const isBusiness = partnerType === 'business';
+    const subject = isBusiness
+      ? 'Verify your email — business partner application'
+      : 'Verify your email — individual partner account';
+    const template = isBusiness
+      ? 'business-partner-verify-email'
+      : 'individual-partner-verify-email';
 
     return this.sendEmail({
       to: email,
       subject,
-      template: 'email-verification',
+      template,
       templateData: {
         firstName,
         otp,
         expiryMinutes: 15,
         verificationTime: new Date().toLocaleString(),
+        portalUrl,
+      },
+    });
+  }
+
+  async sendBusinessPartnerEmailVerifiedConfirmation(
+    email: string,
+    firstName: string,
+    meetingBookingUrl: string,
+  ): Promise<boolean> {
+    const subject = 'Email verified — next steps for your PlanetTalk partner application';
+
+    return this.sendEmail({
+      to: email,
+      subject,
+      template: 'business-partner-email-verified',
+      templateData: {
+        firstName,
+        meetingBookingUrl,
         portalUrl: process.env.NODE_ENV === 'production' 
           ? 'https://portal.planettalk.com/en'
           : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
+      },
+      previewText:
+        'Your email is verified. Book a meeting if you wish while we review your application.',
+    });
+  }
+
+  async sendBusinessApplicationAdminNotification(payload: {
+    userId: string;
+    email: string;
+    firstName: string;
+    lastName: string;
+    phoneNumber?: string | null;
+    country: string;
+    companyName: string;
+    businessAddress?: string | null;
+    primaryBusinessActivity?: string | null;
+    primarySpecialty?: string | null;
+    customerInteractionType?: string | null;
+    sellsInternationalGoods?: boolean | null;
+    expectedVolume?: string | null;
+    region?: string | null;
+    companyRegistrationNumber?: string | null;
+    emailVerified: boolean;
+  }): Promise<void> {
+    const raw =
+      this.configService.get<string>('ADMIN_BUSINESS_APPLICATION_EMAILS') || '';
+    const recipients = raw
+      .split(/[,;\s]+/)
+      .map((e) => e.trim())
+      .filter(Boolean);
+
+    if (recipients.length === 0) {
+      this.logger.warn(
+        'ADMIN_BUSINESS_APPLICATION_EMAILS is not set; skipping admin notification for business registration',
+      );
+      return;
+    }
+
+    const meetingBookingUrl =
+      this.configService.get<string>('PARTNER_MEETING_BOOKING_URL')?.trim() ||
+      '';
+
+    const activityLabels: Record<string, string> = {
+      grocery_convenience: 'Grocery / Convenience',
+      restaurant_cafe: 'Restaurant / Cafe',
+      bar_pub: 'Bar / Pub',
+      specialty_food_import: 'Specialty Food Import',
+      professional_services: 'Professional Services',
+      other: 'Other',
+    };
+
+    const interactionLabels: Record<string, string> = {
+      sit_down_table_service: 'Sit-down / Table Service',
+      grab_and_go: 'Grab-and-go / Over the counter',
+      appointment_based: 'Appointment based',
+    };
+
+    const lines = [
+      'New business partner self-registration',
+      `User ID: ${payload.userId}`,
+      `Name: ${payload.firstName} ${payload.lastName}`,
+      `Email: ${payload.email}`,
+      `Phone: ${payload.phoneNumber || '—'}`,
+      `Country: ${payload.country}`,
+      `Company: ${payload.companyName}`,
+      `Business address: ${payload.businessAddress || '—'}`,
+      `Primary business activity: ${payload.primaryBusinessActivity ? (activityLabels[payload.primaryBusinessActivity] || payload.primaryBusinessActivity) : '—'}`,
+      `Primary specialty: ${payload.primarySpecialty || '—'}`,
+      `Customer interaction: ${payload.customerInteractionType ? (interactionLabels[payload.customerInteractionType] || payload.customerInteractionType) : '—'}`,
+      `Sells international / ethnic goods: ${payload.sellsInternationalGoods != null ? (payload.sellsInternationalGoods ? 'Yes' : 'No') : '—'}`,
+      ...(payload.expectedVolume ? [`Expected volume: ${payload.expectedVolume}`] : []),
+      ...(payload.region ? [`Region: ${payload.region}`] : []),
+      `Company registration: ${payload.companyRegistrationNumber || '—'}`,
+      `Email verified (at submit): ${payload.emailVerified ? 'yes' : 'no'}`,
+      meetingBookingUrl
+        ? `Meeting booking link (shown to applicant — e.g. Calendly): ${meetingBookingUrl}`
+        : 'Meeting booking link: (PARTNER_MEETING_BOOKING_URL not set — configure for Calendly)',
+    ];
+
+    const subject = `[Partner Portal] New business application — ${payload.companyName}`;
+
+    for (const to of recipients) {
+      await this.sendEmail({
+        to,
+        subject,
+        template: 'business-application-admin-notify',
+        templateData: {
+          ...payload,
+          detailLines: lines,
+          submittedAt: new Date().toISOString(),
+        },
+      });
+    }
+  }
+
+  async sendBusinessPartnerRejectionEmail(payload: {
+    email: string;
+    firstName: string;
+    companyName: string;
+    reason?: string | null;
+  }): Promise<void> {
+    await this.sendEmail({
+      to: payload.email,
+      subject: `PlanetTalk Partner Application — Update for ${payload.companyName}`,
+      template: 'business-partner-rejection',
+      templateData: {
+        firstName: payload.firstName,
+        companyName: payload.companyName,
+        reason: payload.reason || null,
+        supportEmail: 'agent@planettalk.com',
       },
     });
   }

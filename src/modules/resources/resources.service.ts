@@ -86,10 +86,13 @@ export class ResourcesService {
 
     const savedResource = await this.resourcesRepository.save(resource);
 
-    // Note: Automatic notifications disabled - admins can manually notify agents if needed
-    // if (savedResource.visibility === ResourceVisibility.PUBLIC && savedResource.isActive) {
-    //   await this.notifyAgentsOfNewResource(savedResource);
-    // }
+    if (savedResource.visibility === ResourceVisibility.PUBLIC && savedResource.isActive) {
+      try {
+        await this.notifyAgentsOfNewResource(savedResource);
+      } catch (notifError) {
+        console.error(`Failed to send resource notification for "${savedResource.title}":`, notifError);
+      }
+    }
 
     return savedResource;
   }
@@ -245,6 +248,7 @@ export class ResourcesService {
    */
   async update(id: string, updateResourceDto: UpdateResourceDto): Promise<Resource> {
     const resource = await this.findOne(id);
+    const wasPreviouslyNonPublic = resource.visibility !== ResourceVisibility.PUBLIC;
 
     // Update dates if provided
     if (updateResourceDto.publishedAt) {
@@ -258,12 +262,14 @@ export class ResourcesService {
     
     const updatedResource = await this.resourcesRepository.save(resource);
 
-    // Note: Automatic notifications disabled - admins can manually notify agents if needed
-    // if (updateResourceDto.visibility === ResourceVisibility.PUBLIC && 
-    //     updateResourceDto.isActive && 
-    //     resource.visibility !== ResourceVisibility.PUBLIC) {
-    //   await this.notifyAgentsOfNewResource(updatedResource);
-    // }
+    // Notify agents when a resource is newly made public and active
+    if (wasPreviouslyNonPublic && updatedResource.visibility === ResourceVisibility.PUBLIC && updatedResource.isActive) {
+      try {
+        await this.notifyAgentsOfNewResource(updatedResource);
+      } catch (notifError) {
+        console.error(`Failed to send resource update notification for "${updatedResource.title}":`, notifError);
+      }
+    }
 
     return updatedResource;
   }

@@ -1,0 +1,19 @@
+<p>Hello {{firstName}},</p>
+
+<p>Thank you for your interest in becoming a PlanetTalk business partner.</p>
+
+<p>After reviewing your application for <strong>{{companyName}}</strong>, we are unable to approve your partnership at this time.</p>
+
+{{#if reason}}
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #dc3545;">
+    <p style="margin: 0;"><strong>Reason:</strong> {{reason}}</p>
+</div>
+{{/if}}
+
+<p>If you believe this decision was made in error or your circumstances have changed, you are welcome to reach out to our team to discuss your application further.</p>
+
+<p>Contact us at <a href="mailto:{{supportEmail}}" style="color: #24B6C3;">{{supportEmail}}</a></p>
+
+<p>We appreciate the time you took to apply and wish you the best.</p>
+
+<p>Kind regards,<br><strong>The PlanetTalk Partner Team</strong></p>

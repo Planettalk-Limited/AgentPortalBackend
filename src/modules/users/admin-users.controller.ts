@@ -16,6 +16,8 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { ApproveBusinessPartnerDto } from './dto/approve-business-partner.dto';
+import { RejectBusinessPartnerDto } from './dto/reject-business-partner.dto';
 
 @ApiTags('Admin - User Management')
 @ApiBearerAuth()
@@ -48,6 +50,43 @@ export class AdminUsersController {
   @ApiResponse({ status: 200, description: 'User statistics' })
   getUserStats() {
     return this.usersService.getUserStats();
+  }
+
+  @Get('pending-business-partners')
+  @ApiOperation({
+    summary: 'List business partner registrations awaiting approval (Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'List of users' })
+  listPendingBusinessPartners() {
+    return this.usersService.listPendingBusinessPartners();
+  }
+
+  @Post(':id/approve-business-partner')
+  @ApiOperation({
+    summary:
+      'Approve business partner: assign custom partner code, create partner profile, activate user, send onboarding email (Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Partner approved' })
+  @ApiResponse({ status: 400, description: 'Invalid state or duplicate code' })
+  approveBusinessPartner(
+    @Param('id') id: string,
+    @Body() body: ApproveBusinessPartnerDto,
+  ) {
+    return this.usersService.approveBusinessPartner(id, body.partnerCode);
+  }
+
+  @Post(':id/reject-business-partner')
+  @ApiOperation({
+    summary:
+      'Reject business partner application: update status to rejected and send rejection email (Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Partner application rejected' })
+  @ApiResponse({ status: 400, description: 'Invalid state for rejection' })
+  rejectBusinessPartner(
+    @Param('id') id: string,
+    @Body() body: RejectBusinessPartnerDto,
+  ) {
+    return this.usersService.rejectBusinessPartner(id, body.reason);
   }
 
   @Get(':id')

@@ -20,6 +20,8 @@ export enum UserStatus {
   INACTIVE = 'inactive',
   SUSPENDED = 'suspended',
   PENDING = 'pending',
+  AWAITING_PARTNER_APPROVAL = 'awaiting_partner_approval',
+  REJECTED = 'rejected',
 }
 
 @Entity('users')
