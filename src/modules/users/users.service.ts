@@ -8,8 +8,10 @@ import * as crypto from 'crypto';
 import { User, UserRole, UserStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateBusinessPartnerApplicationDto } from './dto/update-business-partner-application.dto';
 import { AgentsService } from '../agents/agents.service';
 import { EmailService } from '../email/email.service';
+import { PartnerRegistrationType } from '../auth/dto/register.dto';
 
 @Injectable()
 export class UsersService {
@@ -35,11 +37,27 @@ export class UsersService {
   }
 
   /**
-   * Register a new user with automatic agent and referral data creation
-   * User starts as PENDING and receives welcome email with their login details
+   * Register a new user: individuals get a pending agent profile + auto-generated code;
+   * business partners get user + business metadata only (no agent / code until admin approval).
    */
-  async register(registerData: { firstName: string; lastName: string; country: string; phoneNumber?: string; email: string; password: string }): Promise<any> {
-    // Check if user already exists
+  async register(registerData: {
+    firstName: string;
+    lastName: string;
+    country: string;
+    phoneNumber?: string;
+    email: string;
+    password: string;
+    partnerType?: PartnerRegistrationType;
+    companyName?: string;
+    businessAddress?: string;
+    primaryBusinessActivity?: string;
+    primarySpecialty?: string;
+    customerInteractionType?: string;
+    sellsInternationalGoods?: boolean;
+    expectedVolume?: string;
+    region?: string;
+    companyRegistrationNumber?: string;
+  }): Promise<any> {
     const existingUser = await this.usersRepository.findOne({
       where: { email: registerData.email },
     });
@@ -48,12 +66,15 @@ export class UsersService {
       throw new BadRequestException('User with this email already exists');
     }
 
-    // Hash the user's chosen password (not a temporary one)
     const saltRounds = parseInt(this.configService.get('BCRYPT_ROUNDS', '10'));
     const hashedPassword = await bcrypt.hash(registerData.password, saltRounds);
-
-    // Normalize phone number - convert empty string to null
     const phoneNumber = registerData.phoneNumber?.trim() || null;
+    const isBusiness =
+      registerData.partnerType === PartnerRegistrationType.BUSINESS;
+
+    const meetingBookingUrl =
+      this.configService.get<string>('PARTNER_MEETING_BOOKING_URL')?.trim() ||
+      '';
 
     const user = this.usersRepository.create({
       firstName: registerData.firstName,
@@ -63,52 +84,141 @@ export class UsersService {
       email: registerData.email,
       passwordHash: hashedPassword,
       role: UserRole.AGENT,
-      status: UserStatus.PENDING, // Start as PENDING verification
-      username: registerData.email, // Username is the email
-      isFirstLogin: true, // Mark for first login verification
-      metadata: {
-        registrationMethod: 'self_registration',
-        userCreatedPassword: true,
-        registeredAt: new Date().toISOString(),
-        pendingApproval: true,
-      },
+      status: UserStatus.PENDING,
+      username: registerData.email,
+      isFirstLogin: true,
+      metadata: isBusiness
+        ? {
+            registrationMethod: 'self_registration_business',
+            partnerType: 'business',
+            userCreatedPassword: true,
+            registeredAt: new Date().toISOString(),
+            pendingApproval: true,
+            business: {
+              companyName: registerData.companyName,
+              businessAddress: registerData.businessAddress ?? null,
+              primaryBusinessActivity: registerData.primaryBusinessActivity ?? null,
+              primarySpecialty: registerData.primarySpecialty ?? null,
+              customerInteractionType: registerData.customerInteractionType ?? null,
+              sellsInternationalGoods: registerData.sellsInternationalGoods ?? null,
+              expectedVolume: registerData.expectedVolume ?? null,
+              region: registerData.region ?? null,
+              companyRegistrationNumber: registerData.companyRegistrationNumber ?? null,
+            },
+          }
+        : {
+            registrationMethod: 'self_registration',
+            partnerType: 'individual',
+            userCreatedPassword: true,
+            registeredAt: new Date().toISOString(),
+            pendingApproval: true,
+          },
     });
 
     const savedUser = await this.usersRepository.save(user);
 
-    // Auto-create agent profile with referral data (but in PENDING status)
-    const agentData = await this.agentsService.createPendingAgentWithReferralData(savedUser);
+    let agentData: any = null;
+    if (!isBusiness) {
+      agentData =
+        await this.agentsService.createPendingAgentWithReferralData(savedUser);
+    } else {
+      try {
+        await this.emailService.sendBusinessApplicationAdminNotification({
+          userId: savedUser.id,
+          email: savedUser.email,
+          firstName: savedUser.firstName,
+          lastName: savedUser.lastName,
+          phoneNumber: savedUser.phoneNumber,
+          country: savedUser.country,
+          companyName: registerData.companyName!,
+          businessAddress: registerData.businessAddress ?? null,
+          primaryBusinessActivity: registerData.primaryBusinessActivity ?? null,
+          primarySpecialty: registerData.primarySpecialty ?? null,
+          customerInteractionType: registerData.customerInteractionType ?? null,
+          sellsInternationalGoods: registerData.sellsInternationalGoods ?? null,
+          expectedVolume: registerData.expectedVolume ?? null,
+          region: registerData.region ?? null,
+          companyRegistrationNumber: registerData.companyRegistrationNumber ?? null,
+          emailVerified: false,
+        });
+      } catch (err) {
+        console.error('Failed to notify admins of business registration:', err);
+      }
+    }
 
-    // Generate and send email verification OTP instead of welcome email
+    const portalUrl = this.emailService.getPartnerPortalBaseUrl();
+    try {
+      if (isBusiness) {
+        await this.emailService.sendBusinessPartnerRegistrationAcknowledgement(
+          savedUser.email,
+          savedUser.firstName,
+          registerData.companyName!,
+          meetingBookingUrl,
+          portalUrl,
+        );
+      } else {
+        await this.emailService.sendIndividualPartnerRegistrationAcknowledgement(
+          savedUser.email,
+          savedUser.firstName,
+          portalUrl,
+        );
+      }
+    } catch (ackErr) {
+      console.error('Failed to send registration acknowledgement email:', ackErr);
+    }
+
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpiry = new Date();
-      otpExpiry.setMinutes(otpExpiry.getMinutes() + 15); // 15 minutes expiry
+      otpExpiry.setMinutes(otpExpiry.getMinutes() + 15);
 
-      // Save OTP to user metadata
+      const userForOtp = await this.findById(savedUser.id);
       await this.update(savedUser.id, {
         metadata: {
-          ...savedUser.metadata,
+          ...userForOtp.metadata,
           emailVerificationOTP: otp,
           emailVerificationOTPExpiry: otpExpiry.toISOString(),
         },
       });
 
-      // Send verification email
       await this.emailService.sendEmailVerificationOTP(
-        savedUser.email,
-        savedUser.firstName,
-        otp
+        userForOtp.email,
+        userForOtp.firstName,
+        otp,
+        isBusiness ? 'business' : 'individual',
       );
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);
-      // Don't fail registration if email fails
+    }
+
+    if (isBusiness) {
+      return {
+        success: true,
+        partnerType: 'business',
+        message:
+          'Registration received. Please verify your email. Your application stays pending until our team approves it and assigns your partner code.',
+        requiresEmailVerification: true,
+        meetingBookingUrl,
+        user: {
+          id: savedUser.id,
+          firstName: savedUser.firstName,
+          lastName: savedUser.lastName,
+          email: savedUser.email,
+          status: savedUser.status,
+          emailVerified: false,
+          createdAt: savedUser.createdAt,
+        },
+        pendingVerification: true,
+      };
     }
 
     return {
       success: true,
-      message: 'Registration successful! Please check your email for the verification code. After verification, you will receive your agent credentials and welcome information.',
+      partnerType: 'individual',
+      message:
+        'Registration successful! Please check your email for the verification code. After verification, you will receive your partner credentials and welcome information.',
       requiresEmailVerification: true,
+      meetingBookingUrl,
       user: {
         id: savedUser.id,
         firstName: savedUser.firstName,
@@ -124,8 +234,323 @@ export class UsersService {
         commissionRate: agentData.agent.commissionRate,
         status: agentData.agent.status,
       },
-      // Note: Don't return referral data until user is verified
       pendingVerification: true,
+    };
+  }
+
+  getPartnerMeetingBookingUrl(): string {
+    return (
+      this.configService.get<string>('PARTNER_MEETING_BOOKING_URL')?.trim() || ''
+    );
+  }
+
+  async listPendingBusinessPartners(
+    statuses: UserStatus[] = [
+      UserStatus.AWAITING_PARTNER_APPROVAL,
+      UserStatus.REJECTED,
+    ],
+  ): Promise<Partial<User>[]> {
+    const allowedStatuses = statuses.length
+      ? statuses
+      : [UserStatus.AWAITING_PARTNER_APPROVAL, UserStatus.REJECTED];
+
+    const rows = await this.usersRepository
+      .createQueryBuilder('user')
+      .select([
+        'user.id',
+        'user.firstName',
+        'user.lastName',
+        'user.email',
+        'user.country',
+        'user.phoneNumber',
+        'user.status',
+        'user.metadata',
+        'user.createdAt',
+        'user.updatedAt',
+      ])
+      .where('user.status IN (:...statuses)', {
+        statuses: allowedStatuses,
+      })
+      .andWhere(`"user".metadata->>'partnerType' = :pt`, { pt: 'business' })
+      .orderBy('user.createdAt', 'DESC')
+      .getMany();
+
+    return rows;
+  }
+
+  async approveBusinessPartner(userId: string, partnerCode: string) {
+    const user = await this.findByIdWithRelations(userId);
+    if (user.metadata?.partnerType !== 'business') {
+      throw new BadRequestException('User is not a business partner registration');
+    }
+    if (
+      user.status !== UserStatus.AWAITING_PARTNER_APPROVAL &&
+      user.status !== UserStatus.REJECTED
+    ) {
+      throw new BadRequestException(
+        'User must be in review or rejected status to be approved',
+      );
+    }
+    if (user.agents?.length) {
+      throw new BadRequestException('Partner profile already exists for this user');
+    }
+
+    const agent = await this.agentsService.createPartnerWithAssignedCode(
+      user.id,
+      partnerCode,
+    );
+
+    const wasRejected = user.status === UserStatus.REJECTED;
+
+    const updatedMetadata: Record<string, any> = {
+      ...user.metadata,
+      pendingApproval: false,
+      partnerApprovedAt: new Date().toISOString(),
+      rejectionReason: null,
+      rejectedAt: null,
+      ...(wasRejected
+        ? {
+            approvalOverrideFromRejected: true,
+            approvalOverrideAt: new Date().toISOString(),
+          }
+        : {}),
+    };
+    await this.usersRepository.update(userId, {
+      status: UserStatus.ACTIVE,
+      isFirstLogin: false,
+      metadata: updatedMetadata,
+    });
+
+    const loginUrl =
+      process.env.NODE_ENV === 'production'
+        ? 'https://portal.planettalk.com/en'
+        : this.configService.get('FRONTEND_URL')
+          ? `${this.configService.get('FRONTEND_URL')}/en`
+          : 'http://localhost:3001/en';
+
+    const companyName =
+      (user.metadata?.business as { companyName?: string })?.companyName ||
+      'Your organisation';
+    const meetingBookingUrl = this.getPartnerMeetingBookingUrl();
+
+    try {
+      await this.emailService.sendBusinessPartnerWelcomeEmail({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        fullName: `${user.firstName} ${user.lastName}`,
+        email: user.email,
+        username: user.email,
+        companyName,
+        agentCode: agent.agentCode,
+        commissionRate: agent.commissionRate.toString(),
+        tier: agent.tier,
+        minimumPayout: '20',
+        payoutProcessing: 'Monthly on the 15th',
+        loginUrl,
+        supportEmail: 'agent@planettalk.com',
+        meetingBookingUrl,
+      });
+    } catch (e) {
+      console.error('Failed to send partner onboarding email:', e);
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        status: UserStatus.ACTIVE,
+      },
+      agent: {
+        id: agent.id,
+        agentCode: agent.agentCode,
+        status: agent.status,
+      },
+    };
+  }
+
+  async rejectBusinessPartner(userId: string, reason?: string) {
+    const user = await this.findById(userId);
+    if (user.metadata?.partnerType !== 'business') {
+      throw new BadRequestException('User is not a business partner registration');
+    }
+    if (
+      user.status !== UserStatus.AWAITING_PARTNER_APPROVAL &&
+      user.status !== UserStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'User must be pending or awaiting partner approval to be rejected',
+      );
+    }
+
+    user.status = UserStatus.REJECTED;
+    user.metadata = {
+      ...user.metadata,
+      pendingApproval: false,
+      rejectedAt: new Date().toISOString(),
+      rejectionReason: reason || null,
+    };
+
+    await this.usersRepository.save(user);
+
+    const companyName =
+      (user.metadata?.business as { companyName?: string })?.companyName ||
+      'Your organisation';
+
+    try {
+      await this.emailService.sendBusinessPartnerRejectionEmail({
+        email: user.email,
+        firstName: user.firstName,
+        companyName,
+        reason,
+      });
+    } catch (e) {
+      console.error('Failed to send partner rejection email:', e);
+    }
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        status: user.status,
+      },
+      message: `Business partner application for ${companyName} has been rejected.`,
+    };
+  }
+
+  async moveBusinessPartnerToReview(userId: string, note?: string) {
+    const user = await this.findById(userId);
+    if (user.metadata?.partnerType !== 'business') {
+      throw new BadRequestException('User is not a business partner registration');
+    }
+    if (user.status !== UserStatus.REJECTED) {
+      throw new BadRequestException(
+        'Only rejected business partner applications can be moved to review',
+      );
+    }
+
+    user.status = UserStatus.AWAITING_PARTNER_APPROVAL;
+    user.metadata = {
+      ...user.metadata,
+      pendingApproval: true,
+      movedToReviewAt: new Date().toISOString(),
+      movedToReviewNote: note || null,
+      previousRejection: {
+        rejectedAt: user.metadata?.rejectedAt || null,
+        rejectionReason: user.metadata?.rejectionReason || null,
+      },
+    };
+
+    await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        status: user.status,
+      },
+      message:
+        'Business partner application has been moved back to review and is ready for approval/rejection.',
+    };
+  }
+
+  async updateBusinessPartnerApplication(
+    userId: string,
+    updateDto: UpdateBusinessPartnerApplicationDto,
+  ) {
+    const user = await this.findById(userId);
+    if (user.metadata?.partnerType !== 'business') {
+      throw new BadRequestException('User is not a business partner registration');
+    }
+
+    if (
+      user.status !== UserStatus.REJECTED &&
+      user.status !== UserStatus.AWAITING_PARTNER_APPROVAL &&
+      user.status !== UserStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Business partner application can only be updated while pending, in review, or rejected',
+      );
+    }
+
+    const {
+      firstName,
+      lastName,
+      country,
+      phoneNumber,
+      companyName,
+      businessAddress,
+      primaryBusinessActivity,
+      primarySpecialty,
+      customerInteractionType,
+      sellsInternationalGoods,
+      expectedVolume,
+      region,
+      companyRegistrationNumber,
+    } = updateDto;
+
+    if (firstName !== undefined) user.firstName = firstName;
+    if (lastName !== undefined) user.lastName = lastName;
+    if (country !== undefined) user.country = country;
+    if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+
+    const businessMetadata = {
+      ...(user.metadata?.business || {}),
+    };
+
+    if (companyName !== undefined) businessMetadata.companyName = companyName;
+    if (businessAddress !== undefined)
+      businessMetadata.businessAddress = businessAddress;
+    if (primaryBusinessActivity !== undefined)
+      businessMetadata.primaryBusinessActivity = primaryBusinessActivity;
+    if (primarySpecialty !== undefined)
+      businessMetadata.primarySpecialty = primarySpecialty;
+    if (customerInteractionType !== undefined)
+      businessMetadata.customerInteractionType = customerInteractionType;
+    if (sellsInternationalGoods !== undefined)
+      businessMetadata.sellsInternationalGoods = sellsInternationalGoods;
+    if (expectedVolume !== undefined)
+      businessMetadata.expectedVolume = expectedVolume;
+    if (region !== undefined) businessMetadata.region = region;
+    if (companyRegistrationNumber !== undefined)
+      businessMetadata.companyRegistrationNumber = companyRegistrationNumber;
+
+    const movedFromRejected = user.status === UserStatus.REJECTED;
+    const nowIso = new Date().toISOString();
+
+    user.metadata = {
+      ...user.metadata,
+      business: businessMetadata,
+      pendingApproval: true,
+      applicationUpdatedAt: nowIso,
+      ...(movedFromRejected
+        ? {
+            movedToReviewAt: nowIso,
+            movedToReviewReason: 'application_updated_after_rejection',
+            rejectedAt: null,
+            rejectionReason: null,
+          }
+        : {}),
+    };
+
+    if (movedFromRejected) {
+      user.status = UserStatus.AWAITING_PARTNER_APPROVAL;
+    }
+
+    const saved = await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      user: {
+        id: saved.id,
+        email: saved.email,
+        status: saved.status,
+      },
+      message: movedFromRejected
+        ? 'Business partner application updated and moved to review.'
+        : 'Business partner application updated successfully.',
     };
   }
 

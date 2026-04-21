@@ -16,6 +16,7 @@ import { Verify2FADto, Setup2FADto, Disable2FADto } from './dto/verify-2fa.dto';
 import { VerifyEmailDto, ResendVerificationDto } from './dto/verify-email.dto';
 import { TwoFactorService } from './two-factor.service';
 import { UsersService } from '../users/users.service';
+import { ResubmitBusinessPartnerDto } from './dto/resubmit-business-partner.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -78,6 +79,10 @@ export class AuthController {
     if ('requiresEmailVerification' in loginResult && loginResult.requiresEmailVerification) {
       return loginResult;
     }
+
+    if ('requiresPartnerApproval' in loginResult && loginResult.requiresPartnerApproval) {
+      return loginResult;
+    }
     
     // If login was successful but user has 2FA enabled, check for 2FA requirement
     if ('success' in loginResult && loginResult.success) {
@@ -104,9 +109,12 @@ export class AuthController {
   }
 
   @Post('register')
-  @ApiOperation({ summary: 'User registration with automatic referral setup' })
+  @ApiOperation({
+    summary:
+      'Partner registration — individual (pending agent + auto code) or business (no code until admin approval)',
+  })
   @ApiBody({ type: RegisterDto })
-  @ApiResponse({ status: 201, description: 'User registered successfully with referral data' })
+  @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 400, description: 'Registration failed' })
   async register(@Body() registerDto: RegisterDto) {
     return this.usersService.register(registerDto);
@@ -364,5 +372,24 @@ export class AuthController {
   @ApiResponse({ status: 400, description: 'Invalid or expired verification code' })
   async verifyEmail(@Body() data: VerifyEmailDto) {
     return this.authService.verifyEmailOTP(data.email, data.code);
+  }
+
+  @Post('business-partner/resubmit')
+  @ApiOperation({
+    summary: 'Resubmit a rejected business partner application for review',
+    description:
+      'Authenticates the rejected applicant, updates their application details, and moves status back to review.',
+  })
+  @ApiBody({ type: ResubmitBusinessPartnerDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Business partner application resubmitted successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid state or payload' })
+  @ApiResponse({ status: 401, description: 'Invalid credentials' })
+  async resubmitBusinessPartnerApplication(
+    @Body() data: ResubmitBusinessPartnerDto,
+  ) {
+    return this.authService.resubmitRejectedBusinessPartnerApplication(data);
   }
 }
