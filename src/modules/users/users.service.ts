@@ -8,6 +8,7 @@ import * as crypto from 'crypto';
 import { User, UserRole, UserStatus } from './entities/user.entity';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateBusinessPartnerApplicationDto } from './dto/update-business-partner-application.dto';
 import { AgentsService } from '../agents/agents.service';
 import { EmailService } from '../email/email.service';
 import { PartnerRegistrationType } from '../auth/dto/register.dto';
@@ -243,7 +244,16 @@ export class UsersService {
     );
   }
 
-  async listPendingBusinessPartners(): Promise<Partial<User>[]> {
+  async listPendingBusinessPartners(
+    statuses: UserStatus[] = [
+      UserStatus.AWAITING_PARTNER_APPROVAL,
+      UserStatus.REJECTED,
+    ],
+  ): Promise<Partial<User>[]> {
+    const allowedStatuses = statuses.length
+      ? statuses
+      : [UserStatus.AWAITING_PARTNER_APPROVAL, UserStatus.REJECTED];
+
     const rows = await this.usersRepository
       .createQueryBuilder('user')
       .select([
@@ -258,8 +268,8 @@ export class UsersService {
         'user.createdAt',
         'user.updatedAt',
       ])
-      .where('user.status = :status', {
-        status: UserStatus.AWAITING_PARTNER_APPROVAL,
+      .where('user.status IN (:...statuses)', {
+        statuses: allowedStatuses,
       })
       .andWhere(`"user".metadata->>'partnerType' = :pt`, { pt: 'business' })
       .orderBy('user.createdAt', 'DESC')
@@ -273,9 +283,12 @@ export class UsersService {
     if (user.metadata?.partnerType !== 'business') {
       throw new BadRequestException('User is not a business partner registration');
     }
-    if (user.status !== UserStatus.AWAITING_PARTNER_APPROVAL) {
+    if (
+      user.status !== UserStatus.AWAITING_PARTNER_APPROVAL &&
+      user.status !== UserStatus.REJECTED
+    ) {
       throw new BadRequestException(
-        'User must be awaiting partner approval (email verified)',
+        'User must be in review or rejected status to be approved',
       );
     }
     if (user.agents?.length) {
@@ -287,11 +300,20 @@ export class UsersService {
       partnerCode,
     );
 
-   
+    const wasRejected = user.status === UserStatus.REJECTED;
+
     const updatedMetadata: Record<string, any> = {
       ...user.metadata,
       pendingApproval: false,
       partnerApprovedAt: new Date().toISOString(),
+      rejectionReason: null,
+      rejectedAt: null,
+      ...(wasRejected
+        ? {
+            approvalOverrideFromRejected: true,
+            approvalOverrideAt: new Date().toISOString(),
+          }
+        : {}),
     };
     await this.usersRepository.update(userId, {
       status: UserStatus.ACTIVE,
@@ -394,6 +416,141 @@ export class UsersService {
         status: user.status,
       },
       message: `Business partner application for ${companyName} has been rejected.`,
+    };
+  }
+
+  async moveBusinessPartnerToReview(userId: string, note?: string) {
+    const user = await this.findById(userId);
+    if (user.metadata?.partnerType !== 'business') {
+      throw new BadRequestException('User is not a business partner registration');
+    }
+    if (user.status !== UserStatus.REJECTED) {
+      throw new BadRequestException(
+        'Only rejected business partner applications can be moved to review',
+      );
+    }
+
+    user.status = UserStatus.AWAITING_PARTNER_APPROVAL;
+    user.metadata = {
+      ...user.metadata,
+      pendingApproval: true,
+      movedToReviewAt: new Date().toISOString(),
+      movedToReviewNote: note || null,
+      previousRejection: {
+        rejectedAt: user.metadata?.rejectedAt || null,
+        rejectionReason: user.metadata?.rejectionReason || null,
+      },
+    };
+
+    await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        status: user.status,
+      },
+      message:
+        'Business partner application has been moved back to review and is ready for approval/rejection.',
+    };
+  }
+
+  async updateBusinessPartnerApplication(
+    userId: string,
+    updateDto: UpdateBusinessPartnerApplicationDto,
+  ) {
+    const user = await this.findById(userId);
+    if (user.metadata?.partnerType !== 'business') {
+      throw new BadRequestException('User is not a business partner registration');
+    }
+
+    if (
+      user.status !== UserStatus.REJECTED &&
+      user.status !== UserStatus.AWAITING_PARTNER_APPROVAL &&
+      user.status !== UserStatus.PENDING
+    ) {
+      throw new BadRequestException(
+        'Business partner application can only be updated while pending, in review, or rejected',
+      );
+    }
+
+    const {
+      firstName,
+      lastName,
+      country,
+      phoneNumber,
+      companyName,
+      businessAddress,
+      primaryBusinessActivity,
+      primarySpecialty,
+      customerInteractionType,
+      sellsInternationalGoods,
+      expectedVolume,
+      region,
+      companyRegistrationNumber,
+    } = updateDto;
+
+    if (firstName !== undefined) user.firstName = firstName;
+    if (lastName !== undefined) user.lastName = lastName;
+    if (country !== undefined) user.country = country;
+    if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+
+    const businessMetadata = {
+      ...(user.metadata?.business || {}),
+    };
+
+    if (companyName !== undefined) businessMetadata.companyName = companyName;
+    if (businessAddress !== undefined)
+      businessMetadata.businessAddress = businessAddress;
+    if (primaryBusinessActivity !== undefined)
+      businessMetadata.primaryBusinessActivity = primaryBusinessActivity;
+    if (primarySpecialty !== undefined)
+      businessMetadata.primarySpecialty = primarySpecialty;
+    if (customerInteractionType !== undefined)
+      businessMetadata.customerInteractionType = customerInteractionType;
+    if (sellsInternationalGoods !== undefined)
+      businessMetadata.sellsInternationalGoods = sellsInternationalGoods;
+    if (expectedVolume !== undefined)
+      businessMetadata.expectedVolume = expectedVolume;
+    if (region !== undefined) businessMetadata.region = region;
+    if (companyRegistrationNumber !== undefined)
+      businessMetadata.companyRegistrationNumber = companyRegistrationNumber;
+
+    const movedFromRejected = user.status === UserStatus.REJECTED;
+    const nowIso = new Date().toISOString();
+
+    user.metadata = {
+      ...user.metadata,
+      business: businessMetadata,
+      pendingApproval: true,
+      applicationUpdatedAt: nowIso,
+      ...(movedFromRejected
+        ? {
+            movedToReviewAt: nowIso,
+            movedToReviewReason: 'application_updated_after_rejection',
+            rejectedAt: null,
+            rejectionReason: null,
+          }
+        : {}),
+    };
+
+    if (movedFromRejected) {
+      user.status = UserStatus.AWAITING_PARTNER_APPROVAL;
+    }
+
+    const saved = await this.usersRepository.save(user);
+
+    return {
+      success: true,
+      user: {
+        id: saved.id,
+        email: saved.email,
+        status: saved.status,
+      },
+      message: movedFromRejected
+        ? 'Business partner application updated and moved to review.'
+        : 'Business partner application updated successfully.',
     };
   }
 

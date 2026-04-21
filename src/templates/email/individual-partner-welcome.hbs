@@ -1,31 +1,25 @@
 <p>Hello {{firstName}},</p>
 
-<p><strong>Welcome to PlanetTalk — your individual partner account is active.</strong></p>
+<p><strong>Welcome to PlanetTalk.</strong></p>
+<p>Your application as an Individual Partner is now active.</p>
 
-<p>Thank you for verifying your email. You can now earn commission when customers use your partner code. Here are your details:</p>
+<p><strong>Your partner code:</strong> {{agentCode}}<br>
+<strong>Commission:</strong> Earn for up to 24 months per referral</p>
 
-<div style="background-color: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #24B6C3;">
-    <p style="margin: 8px 0;"><strong>Partner code:</strong> {{agentCode}}</p>
-    <p style="margin: 8px 0;"><strong>Commission rate:</strong> {{commissionRate}}%</p>
-    <p style="margin: 8px 0;"><strong>Sign in with:</strong> {{email}}</p>
-</div>
+<p>You can now start sharing your code with friends and family and begin earning.</p>
 
-<h3>Your onboarding checklist</h3>
-<ul style="list-style: none; padding-left: 0;">
-    <li style="margin: 8px 0;">1️⃣ Log in at <a href="{{loginUrl}}" style="color: #24B6C3;">{{loginUrl}}</a></li>
-    <li style="margin: 8px 0;">2️⃣ Complete your profile</li>
-    <li style="margin: 8px 0;">3️⃣ Share your partner code with your network</li>
-    <li style="margin: 8px 0;">4️⃣ Track earnings in your dashboard</li>
+<p><strong>Log in here:</strong> <a href="{{loginUrl}}" style="color: #24B6C3;">{{loginUrl}}</a><br>
+Use the email and password you registered with.</p>
+
+<p><strong>Next steps:</strong></p>
+<ul>
+  <li>Share your partner code</li>
+  <li>Invite your network to join PlanetTalk</li>
+  <li>Track your earnings from your dashboard</li>
 </ul>
 
-{{#if minimumPayout}}
-<p style="font-size: 14px; color: #555;">Minimum payout: {{minimumPayout}} · {{payoutProcessing}}</p>
-{{/if}}
+<p>You earn every time someone you refer uses the app.</p>
 
-<p>Need help? <a href="mailto:{{supportEmail}}" style="color: #24B6C3;">{{supportEmail}}</a></p>
+<p>If you need help, contact us at <a href="mailto:{{supportEmail}}" style="color: #24B6C3;">{{supportEmail}}</a></p>
 
-<p>Cheers,<br><strong>The PlanetTalk Partner Team</strong></p>
-
-<div class="info-box warning" style="margin-top: 24px; font-size: 14px;">
-    <p style="margin: 0;"><strong>Security:</strong> Keep your login details. Report anything suspicious.</p>
-</div>
+<p>Regards,<br><strong>PlanetTalk Partner Team</strong></p>

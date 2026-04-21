@@ -18,6 +18,8 @@ import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { ApproveBusinessPartnerDto } from './dto/approve-business-partner.dto';
 import { RejectBusinessPartnerDto } from './dto/reject-business-partner.dto';
+import { ReviewBusinessPartnerDto } from './dto/review-business-partner.dto';
+import { UpdateBusinessPartnerApplicationDto } from './dto/update-business-partner-application.dto';
 
 @ApiTags('Admin - User Management')
 @ApiBearerAuth()
@@ -87,6 +89,37 @@ export class AdminUsersController {
     @Body() body: RejectBusinessPartnerDto,
   ) {
     return this.usersService.rejectBusinessPartner(id, body.reason);
+  }
+
+  @Post(':id/review-business-partner')
+  @ApiOperation({
+    summary:
+      'Move rejected business partner application back to review so it can be re-evaluated (Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Partner application moved to review' })
+  @ApiResponse({ status: 400, description: 'Invalid state for review transition' })
+  moveBusinessPartnerToReview(
+    @Param('id') id: string,
+    @Body() body: ReviewBusinessPartnerDto,
+  ) {
+    return this.usersService.moveBusinessPartnerToReview(id, body.note);
+  }
+
+  @Patch(':id/business-partner-application')
+  @ApiOperation({
+    summary:
+      'Update business partner application details. Rejected applications are automatically moved back to review (Admin)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Business partner application updated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid state or invalid payload' })
+  updateBusinessPartnerApplication(
+    @Param('id') id: string,
+    @Body() body: UpdateBusinessPartnerApplicationDto,
+  ) {
+    return this.usersService.updateBusinessPartnerApplication(id, body);
   }
 
   @Get(':id')

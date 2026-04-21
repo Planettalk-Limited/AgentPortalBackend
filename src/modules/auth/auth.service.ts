@@ -15,6 +15,7 @@ import { Verify2FADto } from './dto/verify-2fa.dto';
 import { EmailService } from '../email/email.service';
 import { AgentEarnings } from '../agents/entities/agent-earnings.entity';
 import { ReferralUsage } from '../agents/entities/referral-usage.entity';
+import { ResubmitBusinessPartnerDto } from './dto/resubmit-business-partner.dto';
 
 @Injectable()
 export class AuthService {
@@ -776,6 +777,43 @@ export class AuthService {
       console.error('Error verifying OTP:', error);
       return { success: false, message: 'OTP verification failed' };
     }
+  }
+
+  async resubmitRejectedBusinessPartnerApplication(
+    dto: ResubmitBusinessPartnerDto,
+  ): Promise<Record<string, any>> {
+    const user = await this.usersService.findByEmail(dto.email);
+    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (user.metadata?.partnerType !== 'business') {
+      throw new BadRequestException(
+        'Only business partner applications can be resubmitted',
+      );
+    }
+
+    if (user.status !== UserStatus.REJECTED) {
+      throw new BadRequestException(
+        'Only rejected business partner applications can be resubmitted',
+      );
+    }
+
+    const applicationUpdates = { ...dto };
+    delete applicationUpdates.email;
+    delete applicationUpdates.password;
+
+    const result = await this.usersService.updateBusinessPartnerApplication(
+      user.id,
+      applicationUpdates,
+    );
+
+    return {
+      ...result,
+      requiresPartnerApproval: true,
+      message:
+        'Application updated and moved to review. Our team will notify you after review.',
+    };
   }
 
   /**

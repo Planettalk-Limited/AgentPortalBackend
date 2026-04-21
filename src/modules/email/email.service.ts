@@ -144,11 +144,11 @@ export class EmailService {
   ): Promise<boolean> {
     return this.sendEmail({
       to: templateData.email,
-      subject: `${templateData.firstName}, your PlanetTalk partner account is ready`,
+      subject: `${templateData.firstName}, your Individual Partner account is active`,
       template: 'individual-partner-welcome',
       templateData,
       previewText:
-        'Log in with your email, share your partner code, and track your earnings.',
+        'Your individual partner account is active and ready.',
     });
   }
 
@@ -157,11 +157,11 @@ export class EmailService {
   ): Promise<boolean> {
     return this.sendEmail({
       to: templateData.email,
-      subject: `${templateData.companyName} is approved — welcome to PlanetTalk Partners`,
+      subject: `${templateData.companyName} has been approved as a PlanetTalk Business Partner`,
       template: 'business-partner-welcome',
       templateData,
       previewText:
-        "Your organisation's partner code is ready. Log in to complete onboarding.",
+        "Your account is active, your partner code is ready, and you can now log in.",
     });
   }
 
@@ -499,7 +499,8 @@ export class EmailService {
     firstName: string,
     meetingBookingUrl: string,
   ): Promise<boolean> {
-    const subject = 'Email verified — next steps for your PlanetTalk partner application';
+    const subject =
+      'Business partner onboarding in progress — step 2 complete';
 
     return this.sendEmail({
       to: email,
@@ -513,7 +514,7 @@ export class EmailService {
           : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
       },
       previewText:
-        'Your email is verified. Book a meeting if you wish while we review your application.',
+        'Email verified. Your business partner application is now under review.',
     });
   }
 
@@ -614,7 +615,7 @@ export class EmailService {
   }): Promise<void> {
     await this.sendEmail({
       to: payload.email,
-      subject: `PlanetTalk Partner Application — Update for ${payload.companyName}`,
+      subject: `PlanetTalk Business Partner application update for ${payload.companyName}`,
       template: 'business-partner-rejection',
       templateData: {
         firstName: payload.firstName,
