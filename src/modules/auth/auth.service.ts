@@ -839,7 +839,7 @@ export class AuthService {
       // Generate 6-digit OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpiry = new Date();
-      otpExpiry.setMinutes(otpExpiry.getMinutes() + 15); // 15 minutes expiry for email verification
+      otpExpiry.setHours(otpExpiry.getHours() + 24); // 24 hour expiry for email verification
 
       // Save OTP to user metadata
       await this.usersService.update(user.id, {

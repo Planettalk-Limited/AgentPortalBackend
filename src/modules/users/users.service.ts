@@ -170,7 +170,7 @@ export class UsersService {
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       const otpExpiry = new Date();
-      otpExpiry.setMinutes(otpExpiry.getMinutes() + 15);
+      otpExpiry.setHours(otpExpiry.getHours() + 24);
 
       const userForOtp = await this.findById(savedUser.id);
       await this.update(savedUser.id, {

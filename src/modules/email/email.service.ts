@@ -487,7 +487,9 @@ export class EmailService {
       templateData: {
         firstName,
         otp,
-        expiryMinutes: 15,
+        expiryHours: 24,
+        expiryMinutes: 1440,
+        expiryDisplay: '24 hours',
         verificationTime: new Date().toLocaleString(),
         portalUrl,
       },
@@ -536,18 +538,28 @@ export class EmailService {
     companyRegistrationNumber?: string | null;
     emailVerified: boolean;
   }): Promise<void> {
+    const DEFAULT_ADMIN_RECIPIENTS = [
+      'marketing@planettalk.com',
+      'osasumwen.osemwota@planettalk.com',
+      'temitope.ayedun@planettalk.com',
+      'abraham.ogunmola@planettalk.com',
+    ];
+
     const raw =
       this.configService.get<string>('ADMIN_BUSINESS_APPLICATION_EMAILS') || '';
-    const recipients = raw
+    const configuredRecipients = raw
       .split(/[,;\s]+/)
       .map((e) => e.trim())
       .filter(Boolean);
 
-    if (recipients.length === 0) {
+    const recipients = configuredRecipients.length
+      ? configuredRecipients
+      : DEFAULT_ADMIN_RECIPIENTS;
+
+    if (configuredRecipients.length === 0) {
       this.logger.warn(
-        'ADMIN_BUSINESS_APPLICATION_EMAILS is not set; skipping admin notification for business registration',
+        `ADMIN_BUSINESS_APPLICATION_EMAILS not set — falling back to hardcoded recipients: ${DEFAULT_ADMIN_RECIPIENTS.join(', ')}`,
       );
-      return;
     }
 
     const meetingBookingUrl =
