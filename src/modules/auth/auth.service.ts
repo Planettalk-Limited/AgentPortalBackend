@@ -161,6 +161,7 @@ export class AuthService {
         status: approvalData?.user?.status || user.status,
         isFirstLogin: false, // Reset after successful login
         emailVerified: !!user.emailVerifiedAt,
+        metadata: user.metadata ?? null,
       },
     };
 
@@ -667,6 +668,7 @@ export class AuthService {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        metadata: user.metadata ?? null,
       },
       message: '2FA verification successful - Login complete',
     };
@@ -771,6 +773,7 @@ export class AuthService {
           lastName: user.lastName,
           role: user.role,
           emailVerified: !!user.emailVerifiedAt,
+          metadata: user.metadata ?? null,
         },
       };
     } catch (error) {
