@@ -85,7 +85,7 @@ export class UsersService {
       passwordHash: hashedPassword,
       role: UserRole.AGENT,
       status: UserStatus.PENDING,
-      username: registerData.email,
+      username: registerData.email.slice(0, 50),
       isFirstLogin: true,
       metadata: isBusiness
         ? {
@@ -767,6 +767,7 @@ export class UsersService {
         'user.lastLoginAt',
         'user.emailVerifiedAt',
         'user.isFirstLogin',
+        'user.metadata',
         'user.createdAt',
         'user.updatedAt',
       ]);
