@@ -57,7 +57,7 @@ export class EmailService {
 
       this.domain = domain;
       // Hardcoded from email for all outgoing emails
-      this.fromEmail = 'PlanetTalk Agent <agent@planettalk.com>';
+      this.fromEmail = 'PlanetTalk Agent <partnerst@planettalk.com>';
       
       this.logger.log('✅ Mailgun service initialized successfully');
       this.logger.log(`📧 Ready to send emails from: ${this.fromEmail}`);
@@ -633,7 +633,7 @@ export class EmailService {
         firstName: payload.firstName,
         companyName: payload.companyName,
         reason: payload.reason || null,
-        supportEmail: 'agent@planettalk.com',
+        supportEmail: 'partnerst@planettalk.com',
       },
     });
   }

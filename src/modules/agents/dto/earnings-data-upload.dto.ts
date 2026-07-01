@@ -47,7 +47,7 @@ export class AgentEarningsDataDto {
   @Min(0)
   totalReferrals: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Referrals for current month',
     example: 5,
     minimum: 0
@@ -56,7 +56,27 @@ export class AgentEarningsDataDto {
   @Min(0)
   referralsForCurrentMonth: number;
 
-  @ApiPropertyOptional({ 
+  @ApiPropertyOptional({
+    description: 'Total one-time sign-up bonus income (all time), separate from top-up commission',
+    example: 135.00,
+    minimum: 0
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  totalReferralBonusIncome?: number;
+
+  @ApiPropertyOptional({
+    description: 'One-time sign-up bonus income for current month, separate from top-up commission',
+    example: 15.00,
+    minimum: 0
+  })
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  referralBonusIncomeForCurrentMonth?: number;
+
+  @ApiPropertyOptional({
     description: 'Available balance for payout (optional - will be auto-calculated as totalEarnings - totalPayoutAmount if not provided)',
     example: 1100.50,
     minimum: 0

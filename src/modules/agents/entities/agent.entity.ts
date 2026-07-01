@@ -72,6 +72,12 @@ export class Agent {
   @Column({ type: 'integer', default: 0 })
   activeReferrals: number;
 
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  totalReferralBonusIncome: number; // Lifetime total from the one-time sign-up bonus, separate from top-up commission
+
+  @Column({ type: 'decimal', precision: 15, scale: 2, default: 0 })
+  referralBonusIncomeCurrentMonth: number;
+
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 10.00 })
   commissionRate: number; // Percentage
 

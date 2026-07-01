@@ -177,7 +177,7 @@ export class AdminTemplatesController {
         minimumPayout: '20',
         payoutProcessing: 'Monthly on the 15th',
         loginUrl: 'https://portal.example.com/en',
-        supportEmail: 'agent@planettalk.com',
+        supportEmail: 'partnerst@planettalk.com',
       },
       'business-partner-welcome': {
         firstName: 'Sam',
@@ -189,7 +189,7 @@ export class AdminTemplatesController {
         minimumPayout: '20',
         payoutProcessing: 'Monthly on the 15th',
         loginUrl: 'https://portal.example.com/en',
-        supportEmail: 'agent@planettalk.com',
+        supportEmail: 'partnerst@planettalk.com',
         meetingBookingUrl: 'https://calendly.com/example',
       },
       'business-partner-email-verified': {

@@ -1008,7 +1008,7 @@ export class AuthService {
             loginUrl: process.env.NODE_ENV === 'production' 
               ? 'https://portal.planettalk.com/en'
               : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-            supportEmail: 'agent@planettalk.com',
+            supportEmail: 'partnerst@planettalk.com',
           };
 
           await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
