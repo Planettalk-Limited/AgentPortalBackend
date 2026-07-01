@@ -955,7 +955,7 @@ export class AgentsService {
       loginUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'agent@planettalk.com',
+      supportEmail: 'partnerst@planettalk.com',
     };
 
     await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
@@ -2473,7 +2473,7 @@ export class AgentsService {
       agentPortalUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'agent@planettalk.com',
+      supportEmail: 'partnerst@planettalk.com',
     };
 
     await this.emailService.sendEmail({
@@ -2520,7 +2520,7 @@ export class AgentsService {
       agentPortalUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'agent@planettalk.com',
+      supportEmail: 'partnerst@planettalk.com',
     };
 
     await this.emailService.sendEmail({
@@ -3064,10 +3064,22 @@ export class AgentsService {
             updatedFields.push('totalEarnings');
           }
 
+          if (agentData.totalReferralBonusIncome !== undefined) {
+            updateData.totalReferralBonusIncome = agentData.totalReferralBonusIncome;
+            updatedFields.push('totalReferralBonusIncome');
+          }
+
+          if (agentData.referralBonusIncomeForCurrentMonth !== undefined) {
+            updateData.referralBonusIncomeCurrentMonth = agentData.referralBonusIncomeForCurrentMonth;
+            updatedFields.push('referralBonusIncomeCurrentMonth');
+          }
+
           // Always calculate availableBalance server-side to avoid bad parsed values
+          // Combines top-up commission and the one-time sign-up bonus into the same payout pool
           const totalEarningsValue = agentData.totalEarnings ?? agent.totalEarnings ?? 0;
+          const totalBonusValue = agentData.totalReferralBonusIncome ?? agent.totalReferralBonusIncome ?? 0;
           const totalPayoutValue = agentData.totalPayoutAmount ?? agent.metadata?.totalPayoutAmount ?? 0;
-          updateData.availableBalance = Number(totalEarningsValue) - Number(totalPayoutValue);
+          updateData.availableBalance = (Number(totalEarningsValue) + Number(totalBonusValue)) - Number(totalPayoutValue);
           updatedFields.push('availableBalance (calculated)');
 
           if (agentData.totalReferrals !== undefined) {

@@ -347,7 +347,7 @@ export class UsersService {
         minimumPayout: '20',
         payoutProcessing: 'Monthly on the 15th',
         loginUrl,
-        supportEmail: 'agent@planettalk.com',
+        supportEmail: 'partnerst@planettalk.com',
         meetingBookingUrl,
       });
     } catch (e) {
