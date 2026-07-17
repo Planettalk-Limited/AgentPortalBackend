@@ -35,9 +35,14 @@ export class AdminSystemService {
     ] = await Promise.all([
       this.usersRepository.count(),
       this.agentsRepository.count(),
-      this.earningsRepository
-        .createQueryBuilder('earning')
-        .select('SUM(earning.amount)', 'total')
+      // Total Earnings reflects the sum of each agent's cumulative totalEarnings,
+      // matching what individual agent records and the CSV uploads show. It must NOT
+      // be summed from the agent_earnings records table: those records only capture
+      // per-period (current-month) deltas and are skipped entirely for agents whose
+      // current-month earnings are 0, which would undercount the true total.
+      this.agentsRepository
+        .createQueryBuilder('agent')
+        .select('SUM(agent.totalEarnings)', 'total')
         .getRawOne(),
       this.payoutsRepository
         .createQueryBuilder('payout')
