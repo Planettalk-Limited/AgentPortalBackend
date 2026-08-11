@@ -229,7 +229,7 @@ export class AuthService {
       const agent = user.agents[0]; // Get the primary agent record
       
       // Calculate monthly statistics
-      const monthlyStats = await this.calculateMonthlyStats(agent.id);
+      const monthlyStats = await this.calculateMonthlyStats(agent);
       
       return {
         ...profile,
@@ -302,7 +302,7 @@ export class AuthService {
     };
   }
 
-  private async calculateMonthlyStats(agentId: string): Promise<{ earningsThisMonth: number; referralsThisMonth: number }> {
+  private async calculateMonthlyStats(agent: any): Promise<{ earningsThisMonth: number; referralsThisMonth: number }> {
     // Get current month start and end dates
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -312,21 +312,33 @@ export class AuthService {
     const earningsResult = await this.agentEarningsRepository
       .createQueryBuilder('earning')
       .select('SUM(earning.amount)', 'total')
-      .where('earning.agentId = :agentId', { agentId })
+      .where('earning.agentId = :agentId', { agentId: agent.id })
       .andWhere('earning.earnedAt >= :startOfMonth', { startOfMonth })
       .andWhere('earning.earnedAt <= :endOfMonth', { endOfMonth })
       .andWhere('earning.status = :status', { status: 'confirmed' })
       .getRawOne();
 
-    // Calculate referrals this month
-    const referralsResult = await this.referralUsageRepository
-      .createQueryBuilder('usage')
-      .leftJoin('usage.referralCode', 'code')
-      .where('code.agentId = :agentId', { agentId })
-      .andWhere('usage.usedAt >= :startOfMonth', { startOfMonth })
-      .andWhere('usage.usedAt <= :endOfMonth', { endOfMonth })
-      .andWhere('usage.status = :status', { status: 'confirmed' })
-      .getCount();
+    // Referrals this month. The monthly bulk upload is the source of truth (it
+    // overwrites totalReferrals outright) and creates no referral_usages rows, so the
+    // uploaded figure wins whenever it is present — otherwise this reads 0 while
+    // Total Referrals moves. Mirrors AgentsService.calculateReferralsThisMonth.
+    const uploadedReferrals = agent.metadata?.currentMonthReferrals;
+    const referralsResult =
+      uploadedReferrals !== undefined && uploadedReferrals !== null && uploadedReferrals !== ''
+        ? Number(uploadedReferrals) || 0
+        : await this.referralUsageRepository
+            .createQueryBuilder('usage')
+            .leftJoin('usage.referralCode', 'code')
+            // Portal-captured referrals leave referralCodeId null and identify the agent
+            // via usage.metadata.agentCode, so the code join alone never matches them.
+            .where("(code.agentId = :agentId OR usage.metadata->>'agentCode' = :agentCode)", {
+              agentId: agent.id,
+              agentCode: agent.agentCode,
+            })
+            .andWhere('usage.usedAt >= :startOfMonth', { startOfMonth })
+            .andWhere('usage.usedAt <= :endOfMonth', { endOfMonth })
+            .andWhere('usage.status = :status', { status: 'confirmed' })
+            .getCount();
 
     return {
       earningsThisMonth: Number(earningsResult?.total || 0),
@@ -1008,7 +1020,7 @@ export class AuthService {
             loginUrl: process.env.NODE_ENV === 'production' 
               ? 'https://portal.planettalk.com/en'
               : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-            supportEmail: 'partnerst@planettalk.com',
+            supportEmail: 'partners@planettalk.com',
           };
 
           await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
