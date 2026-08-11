@@ -57,7 +57,7 @@ export class EmailService {
 
       this.domain = domain;
       // Hardcoded from email for all outgoing emails
-      this.fromEmail = 'PlanetTalk Agent <partnerst@planettalk.com>';
+      this.fromEmail = 'PlanetTalk Partners <partners@planettalk.com>';
       
       this.logger.log('✅ Mailgun service initialized successfully');
       this.logger.log(`📧 Ready to send emails from: ${this.fromEmail}`);
@@ -263,7 +263,7 @@ export class EmailService {
     applicationId?: string,
     phoneNumber?: string
   ): Promise<boolean> {
-    const subject = 'Agent Application Received - Thank You!';
+    const subject = 'Partner Application Received - Thank You!';
 
     return this.sendEmail({
       to: email,
@@ -297,7 +297,7 @@ export class EmailService {
       payoutSchedule?: string;
     }
   ): Promise<boolean> {
-    const subject = `Welcome, ${firstName}! Your PlanetTalk Agent Journey Begins 🎉`;
+    const subject = `Welcome, ${firstName}! Your PlanetTalk Partner Journey Begins 🎉`;
 
     return this.sendEmail({
       to: email,
@@ -344,7 +344,7 @@ export class EmailService {
     resetUrl: string,
     has2FA: boolean = false
   ): Promise<boolean> {
-    const subject = 'Reset Your PlanetTalk Agent Password';
+    const subject = 'Reset Your PlanetTalk Partner Password';
 
     return this.sendEmail({
       to: email,
@@ -447,7 +447,7 @@ export class EmailService {
     firstName: string,
     otp: string
   ): Promise<boolean> {
-    const subject = '🔐 Your Login Code - Agent Portal';
+    const subject = '🔐 Your Login Code - Partner Portal';
 
     return this.sendEmail({
       to: email,
@@ -633,7 +633,7 @@ export class EmailService {
         firstName: payload.firstName,
         companyName: payload.companyName,
         reason: payload.reason || null,
-        supportEmail: 'partnerst@planettalk.com',
+        supportEmail: 'partners@planettalk.com',
       },
     });
   }

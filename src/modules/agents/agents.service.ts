@@ -325,7 +325,7 @@ export class AgentsService {
     }
 
     // Add monthly statistics to the agent object
-    const monthlyStats = await this.calculateAgentMonthlyStats(agent.id);
+    const monthlyStats = await this.calculateAgentMonthlyStats(agent);
     
     // Add monthly statistics as additional properties to the agent object
     (agent as any).earningsThisMonth = monthlyStats.earningsThisMonth;
@@ -955,7 +955,7 @@ export class AgentsService {
       loginUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'partnerst@planettalk.com',
+      supportEmail: 'partners@planettalk.com',
     };
 
     await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
@@ -2473,7 +2473,7 @@ export class AgentsService {
       agentPortalUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'partnerst@planettalk.com',
+      supportEmail: 'partners@planettalk.com',
     };
 
     await this.emailService.sendEmail({
@@ -2520,7 +2520,7 @@ export class AgentsService {
       agentPortalUrl: process.env.NODE_ENV === 'production' 
         ? 'https://portal.planettalk.com/en'
         : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      supportEmail: 'partnerst@planettalk.com',
+      supportEmail: 'partners@planettalk.com',
     };
 
     await this.emailService.sendEmail({
@@ -2596,7 +2596,7 @@ export class AgentsService {
   /**
    * Calculate monthly statistics for an agent
    */
-  private async calculateAgentMonthlyStats(agentId: string): Promise<{ earningsThisMonth: number; referralsThisMonth: number }> {
+  private async calculateAgentMonthlyStats(agent: Agent): Promise<{ earningsThisMonth: number; referralsThisMonth: number }> {
     // Get current month start and end dates
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -2606,26 +2606,51 @@ export class AgentsService {
     const earningsResult = await this.earningsRepository
       .createQueryBuilder('earning')
       .select('SUM(earning.amount)', 'total')
-      .where('earning.agentId = :agentId', { agentId })
+      .where('earning.agentId = :agentId', { agentId: agent.id })
       .andWhere('earning.earnedAt >= :startOfMonth', { startOfMonth })
       .andWhere('earning.earnedAt <= :endOfMonth', { endOfMonth })
       .andWhere('earning.status = :status', { status: 'confirmed' })
       .getRawOne();
 
-    // Calculate referrals this month
-    const referralsResult = await this.referralUsageRepository
+    return {
+      earningsThisMonth: Number(earningsResult?.total || 0),
+      referralsThisMonth: await this.calculateReferralsThisMonth(agent, startOfMonth, endOfMonth),
+    };
+  }
+
+  /**
+   * Referrals for the current month.
+   *
+   * The monthly bulk upload is the source of truth for referral counts — it
+   * overwrites totalReferrals outright — so the uploaded figure wins whenever it
+   * is present. Only fall back to counting usage rows for agents that have never
+   * been through an upload, otherwise the tile reads 0 while Total Referrals
+   * moves, because a bulk upload creates no referral_usages rows at all.
+   */
+  private async calculateReferralsThisMonth(
+    agent: Agent,
+    startOfMonth: Date,
+    endOfMonth: Date,
+  ): Promise<number> {
+    const uploaded = agent.metadata?.currentMonthReferrals;
+    if (uploaded !== undefined && uploaded !== null && uploaded !== '') {
+      return Number(uploaded) || 0;
+    }
+
+    // Referrals captured by the portal itself store the agent in
+    // usage.metadata.agentCode and leave referralCodeId null (see useReferralCode),
+    // so joining through referral_codes alone would never match them.
+    return this.referralUsageRepository
       .createQueryBuilder('usage')
       .leftJoin('usage.referralCode', 'code')
-      .where('code.agentId = :agentId', { agentId })
+      .where("(code.agentId = :agentId OR usage.metadata->>'agentCode' = :agentCode)", {
+        agentId: agent.id,
+        agentCode: agent.agentCode,
+      })
       .andWhere('usage.usedAt >= :startOfMonth', { startOfMonth })
       .andWhere('usage.usedAt <= :endOfMonth', { endOfMonth })
       .andWhere('usage.status = :status', { status: 'confirmed' })
       .getCount();
-
-    return {
-      earningsThisMonth: Number(earningsResult?.total || 0),
-      referralsThisMonth: referralsResult || 0,
-    };
   }
 
   /**
