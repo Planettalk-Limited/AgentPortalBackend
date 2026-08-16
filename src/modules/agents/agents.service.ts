@@ -666,9 +666,9 @@ export class AgentsService {
   private async generateAgentCode(): Promise<string> {
     const prefix = 'PTA';
     const minCode = 1;
-    const maxCode = 205;
+    const maxCode = 9999;
 
-    // Get all existing agent codes in the range PTA0001-PTA0205
+    // Get all existing agent codes in the range PTA0001-PTA9999
     const existingAgents = await this.agentsRepository
       .createQueryBuilder('agent')
       .select('agent.agentCode')
