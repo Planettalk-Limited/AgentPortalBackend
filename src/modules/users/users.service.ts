@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Like } from 'typeorm';
+import { DataSource, Repository, Like } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -18,6 +18,7 @@ export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    private dataSource: DataSource,
     private configService: ConfigService,
     @Inject(forwardRef(() => AgentsService))
     private agentsService: AgentsService,
@@ -34,6 +35,60 @@ export class UsersService {
     });
 
     return this.usersRepository.save(user);
+  }
+
+  /**
+   * True when a write failed because the agent code was taken between the moment it
+   * was chosen and the moment it was inserted - a concurrent registration won the
+   * race. Postgres reports unique violations as 23505; the agentCode check keeps a
+   * duplicate email (also 23505) from being retried pointlessly.
+   */
+  private isAgentCodeCollision(error: any): boolean {
+    const code = error?.code ?? error?.driverError?.code;
+    if (code !== '23505') {
+      return false;
+    }
+
+    const detail = [
+      error?.detail,
+      error?.driverError?.detail,
+      error?.constraint,
+      error?.driverError?.constraint,
+      error?.message,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+    return detail.toLowerCase().includes('agentcode');
+  }
+
+  /**
+   * Run a registration attempt, re-running it if it lost an agent code race.
+   * Anything else is rethrown untouched on the first failure.
+   */
+  private async withAgentCodeRetry<T>(attempt: () => Promise<T>): Promise<T> {
+    const maxAttempts = 3;
+
+    for (let tries = 1; ; tries++) {
+      try {
+        return await attempt();
+      } catch (error) {
+        if (tries >= maxAttempts || !this.isAgentCodeCollision(error)) {
+          throw error;
+        }
+        console.warn(
+          `Agent code collision on registration attempt ${tries}, retrying with the next free code`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Activate the agent profile of a partner whose email has just been verified.
+   * Delegated to AgentsService, which owns the status transition.
+   */
+  async activateVerifiedPartnerAgent(userId: string): Promise<any | null> {
+    return this.agentsService.activateAgentAfterEmailVerification(userId);
   }
 
   /**
@@ -76,7 +131,7 @@ export class UsersService {
       this.configService.get<string>('PARTNER_MEETING_BOOKING_URL')?.trim() ||
       '';
 
-    const user = this.usersRepository.create({
+    const userPayload = {
       firstName: registerData.firstName,
       lastName: registerData.lastName,
       country: registerData.country,
@@ -113,15 +168,45 @@ export class UsersService {
             registeredAt: new Date().toISOString(),
             pendingApproval: true,
           },
-    });
+    };
 
-    const savedUser = await this.usersRepository.save(user);
+    // The account and its agent profile must be created atomically. Saving the user
+    // first and assigning the code afterwards is what orphaned 14 partners while the
+    // PTA pool was exhausted: the user row committed, generateAgentCode() threw, and
+    // they were left able to log in with no agent profile and no code. If the profile
+    // cannot be created the account must not survive, so registration fails cleanly
+    // and the person can try again. See users.service.register.spec.ts.
+    //
+    // The entity is built fresh inside each attempt: TypeORM writes the generated id
+    // onto the instance it saves, so reusing one across a retry would turn the second
+    // insert into an update of a row the rollback already discarded.
+    const runRegistration = () =>
+      this.dataSource.transaction(async (manager) => {
+        const createdUser = await manager.save(
+          this.usersRepository.create(userPayload),
+        );
 
-    let agentData: any = null;
-    if (!isBusiness) {
-      agentData =
-        await this.agentsService.createPendingAgentWithReferralData(savedUser);
-    } else {
+        // Business partners get no agent profile here: their code is assigned by an
+        // admin at approval, so there is nothing to keep atomic with the user row.
+        const createdAgent = isBusiness
+          ? null
+          : await this.agentsService.createPendingAgentWithReferralData(
+              createdUser,
+              manager,
+            );
+
+        return { savedUser: createdUser, agentData: createdAgent };
+      });
+
+    // generateAgentCode() reads the used codes and then inserts, with no lock in
+    // between, so two people registering in the same moment can pick the same code
+    // and one insert loses to the unique constraint. Retrying re-reads the range and
+    // takes the next free code, which turns a failed signup into a successful one.
+    const { savedUser, agentData } = await this.withAgentCodeRetry(runRegistration);
+
+    // Everything below runs only after the transaction has committed, so no email
+    // ever announces an account that was rolled back.
+    if (isBusiness) {
       try {
         await this.emailService.sendBusinessApplicationAdminNotification({
           userId: savedUser.id,
