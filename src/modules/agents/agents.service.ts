@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcryptjs';
 import { Agent, AgentStatus, AgentTier } from './entities/agent.entity';
@@ -663,13 +663,20 @@ export class AgentsService {
     return code;
   }
 
-  private async generateAgentCode(): Promise<string> {
+  /**
+   * Allocate the first unused code in the PTA range.
+   *
+   * Pass `manager` to read within a caller's transaction, so the code is chosen and
+   * the agent row inserted atomically with whatever else that transaction is doing.
+   */
+  private async generateAgentCode(manager?: EntityManager): Promise<string> {
     const prefix = 'PTA';
     const minCode = 1;
     const maxCode = 9999;
+    const agentsRepository = manager ? manager.getRepository(Agent) : this.agentsRepository;
 
     // Get all existing agent codes in the range PTA0001-PTA9999
-    const existingAgents = await this.agentsRepository
+    const existingAgents = await agentsRepository
       .createQueryBuilder('agent')
       .select('agent.agentCode')
       .where('agent.agentCode LIKE :prefix', { prefix: `${prefix}%` })
@@ -769,14 +776,23 @@ export class AgentsService {
   }
 
   /**
-   * Creates a pending agent profile during registration
+   * Creates a pending agent profile during registration.
+   *
+   * `manager` must be supplied by callers that also create the user row, so the
+   * account and its agent profile commit or fail together. Without it a failure
+   * here leaves a user who can log in but has no agent profile and no code.
    */
-  async createPendingAgentWithReferralData(user: User): Promise<any> {
+  async createPendingAgentWithReferralData(
+    user: User,
+    manager?: EntityManager,
+  ): Promise<any> {
+    const agentsRepository = manager ? manager.getRepository(Agent) : this.agentsRepository;
+
     // Generate unique agent code
-    const agentCode = await this.generateAgentCode();
-    
+    const agentCode = await this.generateAgentCode(manager);
+
     // Create agent in PENDING status
-    const agent = this.agentsRepository.create({
+    const agent = agentsRepository.create({
       userId: user.id,
       agentCode,
       status: AgentStatus.PENDING_APPLICATION, // Start as pending
@@ -796,7 +812,7 @@ export class AgentsService {
       },
     });
 
-    const savedAgent = await this.agentsRepository.save(agent);
+    const savedAgent = await agentsRepository.save(agent);
 
     return {
       agent: savedAgent,
@@ -862,6 +878,49 @@ export class AgentsService {
         createdAt: new Date().toISOString(),
       },
     });
+
+    return this.agentsRepository.save(agent);
+  }
+
+  /**
+   * Activate the agent profile of a partner who has just verified their email.
+   *
+   * Registration creates the profile in PENDING_APPLICATION and email verification
+   * promotes the USER to active - but nothing used to promote the agent. That left
+   * partners holding a code that validateReferralCode() refuses ("This agent is not
+   * currently active"), so referrals silently failed for a code we had just emailed
+   * them. The welcome email carrying the code goes out at this exact moment, so the
+   * profile has to be usable by then.
+   *
+   * Returns null when the user has no agent profile - business partners, whose code
+   * is assigned by an admin at approval. Profiles an admin deliberately switched off
+   * are returned untouched, never resurrected.
+   */
+  async activateAgentAfterEmailVerification(userId: string): Promise<Agent | null> {
+    const agent = await this.agentsRepository.findOne({ where: { userId } });
+
+    if (!agent) {
+      return null;
+    }
+
+    if (
+      agent.status === AgentStatus.ACTIVE ||
+      agent.status === AgentStatus.SUSPENDED ||
+      agent.status === AgentStatus.INACTIVE
+    ) {
+      return agent;
+    }
+
+    const now = new Date();
+    agent.status = AgentStatus.ACTIVE;
+    agent.activatedAt = agent.activatedAt ?? now;
+    agent.lastActivityAt = now;
+    agent.metadata = {
+      ...agent.metadata,
+      pendingVerification: false,
+      activatedAt: (agent.activatedAt ?? now).toISOString(),
+      activatedBy: 'email_verification',
+    };
 
     return this.agentsRepository.save(agent);
   }

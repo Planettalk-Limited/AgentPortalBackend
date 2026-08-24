@@ -1002,10 +1002,10 @@ export class AuthService {
       });
 
       try {
-        const agents = await this.usersService.getUserAgents(user.id);
-        if (agents && agents.length > 0) {
-          const agent = agents[0];
-
+        // The profile must be active before the code goes out: validateReferralCode()
+        // rejects a code whose agent is not active, and the email below carries it.
+        const agent = await this.usersService.activateVerifiedPartnerAgent(user.id);
+        if (agent) {
           const emailData = {
             firstName: user.firstName,
             lastName: user.lastName,
