@@ -447,6 +447,30 @@ export class UsersService {
       .orderBy('user.createdAt', 'DESC')
       .getMany();
 
+    // The quietest failure there is. The partner logs in, sees a code on their
+    // dashboard, shares it — and validateReferralCode() turns every use away with
+    // "This agent is not currently active". Nothing tells the partner, and a
+    // referrer who is refused does not file a bug, so this can sit for months.
+    // Found in production on a partner whose code had been dead since April.
+    const deadCodeRows = await this.usersRepository
+      .createQueryBuilder('user')
+      .innerJoin('agents', 'agent', 'agent."userId" = user.id')
+      .select('user.id', 'id')
+      .addSelect('user.email', 'email')
+      .addSelect('user.firstName', 'firstName')
+      .addSelect('user.lastName', 'lastName')
+      .addSelect('user.status', 'status')
+      .addSelect('user.createdAt', 'createdAt')
+      .addSelect('user.metadata', 'metadata')
+      .addSelect('agent.id', 'agentId')
+      .addSelect('agent.agentCode', 'agentCode')
+      .addSelect('agent.status', 'agentStatus')
+      .where('user.status = :active', { active: UserStatus.ACTIVE })
+      .andWhere('user."emailVerifiedAt" IS NOT NULL')
+      .andWhere('agent.status <> :agentActive', { agentActive: 'active' })
+      .orderBy('user.createdAt', 'DESC')
+      .getRawMany();
+
     const awaitingApproval = await this.usersRepository.find({
       where: { status: UserStatus.AWAITING_PARTNER_APPROVAL },
       order: { createdAt: 'DESC' },
@@ -463,14 +487,32 @@ export class UsersService {
 
     const codePool = await this.agentsService.getCodePoolUsage();
 
+    const deadCode = deadCodeRows.map((r) => ({
+      id: r.id,
+      email: r.email,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      status: r.status,
+      emailVerified: true,
+      createdAt: r.createdAt,
+      partnerType: r.metadata?.partnerType ?? 'individual',
+      companyName:
+        (r.metadata?.business as { companyName?: string })?.companyName ?? null,
+      agentId: r.agentId,
+      agentCode: r.agentCode,
+      agentStatus: r.agentStatus,
+    }));
+
     return {
       codePool,
       counts: {
+        deadCode: deadCode.length,
         missingProfile: missingProfile.length,
         awaitingApproval: awaitingApproval.length,
         rejected: rejected.length,
         unverified,
       },
+      deadCode,
       missingProfile: shape(missingProfile),
       awaitingApproval: shape(awaitingApproval),
       rejected: shape(rejected),
