@@ -52,6 +52,27 @@ export class AdminUsersController {
   }
 
 
+  @Get('partner-health')
+  @ApiOperation({
+    summary:
+      'Partner accounts stuck in a state that cannot resolve itself, plus PTA code pool usage (Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Partner health report' })
+  getPartnerHealth() {
+    return this.usersService.getPartnerHealth();
+  }
+
+  @Post(':id/restore-business-partner')
+  @ApiOperation({
+    summary:
+      'Restore a partner rejected under the old flow: mint their agent profile, clear the rejection, and activate them if their email is verified (Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Partner restored' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  restoreBusinessPartner(@Param('id') id: string) {
+    return this.usersService.restoreRejectedBusinessPartner(id);
+  }
+
   @Patch(':id/business-partner-application')
   @ApiOperation({
     summary:

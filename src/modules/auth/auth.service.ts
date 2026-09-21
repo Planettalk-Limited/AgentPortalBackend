@@ -823,11 +823,21 @@ export class AuthService {
       applicationUpdates,
     );
 
+    // There is no review step any more, so resubmitting restores the account
+    // outright rather than parking it in a queue nobody works.
+    const restored = await this.usersService.restoreRejectedBusinessPartner(
+      user.id,
+    );
+
     return {
       ...result,
-      requiresPartnerApproval: true,
+      requiresPartnerApproval: false,
+      status: restored.status,
+      agentCode: restored.agentCode,
       message:
-        'Application updated and moved to review. Our team will notify you after review.',
+        restored.status === UserStatus.ACTIVE
+          ? 'Your details have been updated and your account is active again. Your partner code is in your inbox.'
+          : 'Your details have been updated. Verify your email to activate your account and receive your partner code.',
     };
   }
 

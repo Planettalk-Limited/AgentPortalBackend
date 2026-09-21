@@ -1644,6 +1644,56 @@ export class AgentsService {
     return results;
   }
 
+  /**
+   * How much of the PTA code pool is left.
+   *
+   * Business partners now draw from the same range as individuals, and they take
+   * a code at registration rather than at approval, so unverified signups hold
+   * codes too. Exhausting the range fails registration outright, so this needs
+   * to be visible before it happens rather than after.
+   */
+  async getCodePoolUsage(): Promise<{
+    prefix: string;
+    min: number;
+    max: number;
+    used: number;
+    available: number;
+    percentUsed: number;
+    highestAssigned: string | null;
+  }> {
+    const prefix = 'PTA';
+    const min = 1;
+    const max = 9999;
+
+    const rows = await this.agentsRepository
+      .createQueryBuilder('agent')
+      .select('agent.agentCode', 'agentCode')
+      .where('agent.agentCode LIKE :prefix', { prefix: `${prefix}%` })
+      .andWhere(
+        `CAST(SUBSTRING(agent.agentCode FROM 4) AS INTEGER) BETWEEN :min AND :max`,
+        { min, max },
+      )
+      .getRawMany();
+
+    const used = rows.length;
+    const total = max - min + 1;
+    const numbers = rows
+      .map((r) => parseInt(String(r.agentCode).slice(3), 10))
+      .filter((n) => !Number.isNaN(n));
+
+    return {
+      prefix,
+      min,
+      max,
+      used,
+      available: total - used,
+      percentUsed: Math.round((used / total) * 1000) / 10,
+      highestAssigned: numbers.length
+        ? `${prefix}${Math.max(...numbers).toString().padStart(4, '0')}`
+        : null,
+    };
+  }
+
   async getAgentStats(): Promise<any> {
     const totalAgents = await this.agentsRepository.count();
     const activeAgents = await this.agentsRepository.count({ where: { status: AgentStatus.ACTIVE } });

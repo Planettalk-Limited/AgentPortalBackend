@@ -379,27 +379,17 @@ export class UsersService {
     if (companyRegistrationNumber !== undefined)
       businessMetadata.companyRegistrationNumber = companyRegistrationNumber;
 
-    const movedFromRejected = user.status === UserStatus.REJECTED;
     const nowIso = new Date().toISOString();
 
+    // Editing details never changes status. This used to push a rejected partner
+    // into AWAITING_PARTNER_APPROVAL, which is now a dead end: no approval step
+    // exists to move them out, login refuses it and validateJwtPayload throws.
+    // Restoring a rejected partner is restoreRejectedBusinessPartner()'s job.
     user.metadata = {
       ...user.metadata,
       business: businessMetadata,
-      pendingApproval: true,
       applicationUpdatedAt: nowIso,
-      ...(movedFromRejected
-        ? {
-            movedToReviewAt: nowIso,
-            movedToReviewReason: 'application_updated_after_rejection',
-            rejectedAt: null,
-            rejectionReason: null,
-          }
-        : {}),
     };
-
-    if (movedFromRejected) {
-      user.status = UserStatus.AWAITING_PARTNER_APPROVAL;
-    }
 
     const saved = await this.usersRepository.save(user);
 
@@ -410,10 +400,138 @@ export class UsersService {
         email: saved.email,
         status: saved.status,
       },
-      message: movedFromRejected
-        ? 'Business partner application updated and moved to review.'
-        : 'Business partner application updated successfully.',
+      message: 'Business partner application updated successfully.',
     };
+  }
+
+  /**
+   * Everything about partner accounts that should not be true any more.
+   *
+   * Removing admin review also removed the page admins used to watch partners
+   * on, so the states that are now anomalies became invisible. Each bucket here
+   * is a way an account can be stuck and never recover on its own:
+   *
+   *  - no agent profile: can log in, /agents/me 404s, dashboard is broken
+   *  - awaiting approval: legacy dead end, nothing transitions out of it
+   *  - rejected: locked out, and with no code, by a rule that no longer exists
+   *
+   * Plus the code pool, which business partners now draw from at registration.
+   */
+  async getPartnerHealth(): Promise<any> {
+    const base = () =>
+      this.usersRepository
+        .createQueryBuilder('user')
+        .leftJoin(
+          'agents',
+          'agent',
+          'agent."userId" = user.id',
+        )
+        .where('user.role = :role', { role: UserRole.AGENT });
+
+    const shape = (rows: any[]) =>
+      rows.map((u) => ({
+        id: u.id,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        status: u.status,
+        emailVerified: !!u.emailVerifiedAt,
+        createdAt: u.createdAt,
+        partnerType: u.metadata?.partnerType ?? 'individual',
+        companyName:
+          (u.metadata?.business as { companyName?: string })?.companyName ?? null,
+      }));
+
+    const missingProfile = await base()
+      .andWhere('agent.id IS NULL')
+      .orderBy('user.createdAt', 'DESC')
+      .getMany();
+
+    const awaitingApproval = await this.usersRepository.find({
+      where: { status: UserStatus.AWAITING_PARTNER_APPROVAL },
+      order: { createdAt: 'DESC' },
+    });
+
+    const rejected = await this.usersRepository.find({
+      where: { status: UserStatus.REJECTED },
+      order: { createdAt: 'DESC' },
+    });
+
+    const unverified = await this.usersRepository.count({
+      where: { role: UserRole.AGENT, status: UserStatus.PENDING },
+    });
+
+    const codePool = await this.agentsService.getCodePoolUsage();
+
+    return {
+      codePool,
+      counts: {
+        missingProfile: missingProfile.length,
+        awaitingApproval: awaitingApproval.length,
+        rejected: rejected.length,
+        unverified,
+      },
+      missingProfile: shape(missingProfile),
+      awaitingApproval: shape(awaitingApproval),
+      rejected: shape(rejected),
+    };
+  }
+
+  /**
+   * Bring a previously rejected business partner back into the normal flow.
+   *
+   * Rejection no longer exists, but accounts rejected under the old flow are
+   * still locked out and - because their code was only ever minted at approval -
+   * have no agent profile either. Flipping the status alone would give them a
+   * login and a dashboard that 404s, which is the failure fef6950 had to clean
+   * up. So this mints the profile too, and only activates the account when the
+   * email is already verified; an unverified partner goes back to PENDING and
+   * activates the moment they verify, exactly like a new registration.
+   */
+  async restoreRejectedBusinessPartner(userId: string): Promise<{
+    status: UserStatus;
+    agentCode: string | null;
+  }> {
+    const user = await this.findByIdWithRelations(userId);
+    const emailVerified = !!user.emailVerifiedAt;
+
+    let agent = user.agents?.[0] ?? null;
+    if (!agent) {
+      const created = await this.agentsService.createPendingAgentWithReferralData(user);
+      agent = created.agent;
+    }
+
+    const nextStatus = emailVerified ? UserStatus.ACTIVE : UserStatus.PENDING;
+
+    const restoredMetadata: Record<string, any> = {
+      ...(user.metadata || {}),
+      pendingApproval: false,
+      rejectedAt: null,
+      rejectionReason: null,
+      restoredFromRejectedAt: new Date().toISOString(),
+    };
+
+    await this.usersRepository.update(userId, {
+      status: nextStatus,
+      metadata: restoredMetadata,
+    });
+
+    // Order matters: validateReferralCode() rejects a code whose agent is not
+    // active, and the welcome email below carries that code.
+    if (emailVerified) {
+      await this.activateVerifiedPartnerAgent(userId);
+      const refreshed = await this.findByIdWithRelations(userId);
+      const activeAgent = refreshed.agents?.[0];
+      if (activeAgent) {
+        try {
+          await this.agentsService.sendAgentWelcomeEmail(refreshed, activeAgent);
+        } catch (err) {
+          console.error('Failed to send welcome email on partner restore:', err);
+        }
+      }
+    }
+
+    return { status: nextStatus, agentCode: agent?.agentCode ?? null };
   }
 
   /**
