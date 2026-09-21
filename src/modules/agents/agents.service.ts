@@ -825,11 +825,18 @@ export class AgentsService {
    * Create an active partner profile with an admin-assigned code (e.g. business partners).
    * Does not use sequential PTA auto-generation.
    */
-  async createPartnerWithAssignedCode(
-    userId: string,
-    partnerCode: string,
-  ): Promise<Agent> {
-    const normalized = partnerCode.trim().toUpperCase();
+  /**
+   * Replace an agent's code with a custom one on request.
+   *
+   * Every partner now self-serves a generic PTA code at registration, so
+   * customisation is a deliberate after-the-fact change an admin makes when a
+   * business asks for one. The old code stops resolving the moment this runs -
+   * validateReferralCode() looks up the current value - so anything already
+   * printed or shared with it goes dead. The previous code is kept in
+   * metadata.codeHistory so support can trace a referral that arrives against it.
+   */
+  async changeAgentCode(agentId: string, newCode: string): Promise<Agent> {
+    const normalized = newCode.trim().toUpperCase();
     if (normalized.length < 3 || normalized.length > 40) {
       throw new BadRequestException(
         'Partner code must be between 3 and 40 characters',
@@ -839,9 +846,13 @@ export class AgentsService {
       throw new BadRequestException('Invalid partner code format');
     }
 
-    const user = await this.usersRepository.findOne({ where: { id: userId } });
-    if (!user) {
-      throw new NotFoundException('User not found');
+    const agent = await this.agentsRepository.findOne({ where: { id: agentId } });
+    if (!agent) {
+      throw new NotFoundException('Agent not found');
+    }
+
+    if (agent.agentCode === normalized) {
+      return agent;
     }
 
     const existingByCode = await this.agentsRepository.findOne({
@@ -853,31 +864,19 @@ export class AgentsService {
       );
     }
 
-    const existingForUser = await this.agentsRepository.findOne({
-      where: { userId },
-    });
-    if (existingForUser) {
-      throw new BadRequestException('This user already has a partner profile');
-    }
+    const previousCode = agent.agentCode;
+    const history = Array.isArray(agent.metadata?.codeHistory)
+      ? agent.metadata.codeHistory
+      : [];
 
-    const agent = this.agentsRepository.create({
-      userId,
-      agentCode: normalized,
-      status: AgentStatus.ACTIVE,
-      tier: AgentTier.BRONZE,
-      totalEarnings: 0,
-      availableBalance: 0,
-      pendingBalance: 0,
-      totalReferrals: 0,
-      activeReferrals: 0,
-      commissionRate: 10.0,
-      activatedAt: new Date(),
-      lastActivityAt: new Date(),
-      metadata: {
-        partnerCodeAssignedByAdmin: true,
-        createdAt: new Date().toISOString(),
-      },
-    });
+    agent.agentCode = normalized;
+    agent.metadata = {
+      ...(agent.metadata || {}),
+      codeHistory: [
+        ...history,
+        { from: previousCode, to: normalized, changedAt: new Date().toISOString() },
+      ],
+    };
 
     return this.agentsRepository.save(agent);
   }
@@ -892,9 +891,8 @@ export class AgentsService {
    * them. The welcome email carrying the code goes out at this exact moment, so the
    * profile has to be usable by then.
    *
-   * Returns null when the user has no agent profile - business partners, whose code
-   * is assigned by an admin at approval. Profiles an admin deliberately switched off
-   * are returned untouched, never resurrected.
+   * Returns null when the user has no agent profile at all. Profiles an admin
+   * deliberately switched off are returned untouched, never resurrected.
    */
   async activateAgentAfterEmailVerification(userId: string): Promise<Agent | null> {
     const agent = await this.agentsRepository.findOne({ where: { userId } });
@@ -1017,7 +1015,18 @@ export class AgentsService {
       supportEmail: 'partners@planettalk.com',
     };
 
-    await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
+    // Business partners run the same flow but keep their own branded copy.
+    if (user.metadata?.partnerType === 'business') {
+      const companyName =
+        (user.metadata?.business as { companyName?: string })?.companyName ||
+        'Your organisation';
+      await this.emailService.sendBusinessPartnerWelcomeEmail({
+        ...emailData,
+        companyName,
+      });
+    } else {
+      await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
+    }
 
     console.log(`Welcome email sent to ${user.email} for agent ${agent.agentCode}`);
   }

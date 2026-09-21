@@ -14,6 +14,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { AgentsService } from './agents.service';
 import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
+import { ChangeAgentCodeDto } from './dto/change-agent-code.dto';
 import { UpdateAgentEarningsDto, UpdateAgentReferralsDto, BulkUpdateEarningsDto, BulkUpdateReferralsDto, UpdateAgentStatsDto, BulkUpdateAgentStatsDto, UpdateAgentStatsByCodeDto, BulkUpdateAgentStatsByCodeDto } from './dto/update-agent-stats.dto';
 
 @ApiTags('Admin - Agent Management')
@@ -96,6 +97,21 @@ export class AdminAgentsController {
   @ApiResponse({ status: 404, description: 'Agent not found' })
   sendCredentials(@Param('id') id: string) {
     return this.agentsService.sendCredentials(id);
+  }
+
+  @Patch(':id/agent-code')
+  @ApiOperation({
+    summary:
+      'Assign a custom partner code in place of the generic PTA code (Admin)',
+  })
+  @ApiResponse({ status: 200, description: 'Partner code changed successfully' })
+  @ApiResponse({ status: 404, description: 'Agent not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid code format or code already in use',
+  })
+  changeAgentCode(@Param('id') id: string, @Body() body: ChangeAgentCodeDto) {
+    return this.agentsService.changeAgentCode(id, body.agentCode);
   }
 
   // Agent Status Management

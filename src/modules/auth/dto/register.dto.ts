@@ -28,12 +28,6 @@ export enum BusinessActivity {
   OTHER = 'other',
 }
 
-export enum CustomerInteractionType {
-  SIT_DOWN_TABLE_SERVICE = 'sit_down_table_service',
-  GRAB_AND_GO = 'grab_and_go',
-  APPOINTMENT_BASED = 'appointment_based',
-}
-
 export class RegisterDto {
   @ApiProperty({ description: 'First name of the user', example: 'John' })
   @IsString()
@@ -126,15 +120,6 @@ export class RegisterDto {
   @IsNotEmpty()
   @MaxLength(200)
   primarySpecialty?: string;
-
-  @ApiPropertyOptional({
-    description: 'How customers typically interact with the business',
-    enum: CustomerInteractionType,
-    example: CustomerInteractionType.GRAB_AND_GO,
-  })
-  @ValidateIf((o: RegisterDto) => o.partnerType === PartnerRegistrationType.BUSINESS)
-  @IsEnum(CustomerInteractionType)
-  customerInteractionType?: CustomerInteractionType;
 
   @ApiPropertyOptional({
     description: 'Does the business currently sell international food, specialty imports, or ethnic goods?',

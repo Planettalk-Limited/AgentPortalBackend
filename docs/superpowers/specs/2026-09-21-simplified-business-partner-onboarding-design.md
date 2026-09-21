@@ -1,7 +1,7 @@
 # Simplified Business Partner Onboarding — Design
 
 **Date:** 2026-09-21
-**Status:** Approved, pending implementation plan
+**Status:** Implemented 2026-09-21. See the implementation notes at the end.
 **Repos:** `AgentPortalBackend` (NestJS), `AgentPortal` (Next.js)
 
 ---
@@ -506,3 +506,60 @@ the unified flow.
 `docs/AGENT_CODE_ASSIGNMENT.md` is already stale — it documents the
 `PTA0001`–`PTA0205` range that commit `8fdd41e` raised to `PTA9999`. Correct it
 while in the area and add the new code-change endpoint.
+
+---
+
+## 13. Implementation notes (2026-09-21)
+
+Built as specified, with these deviations and additions found during the work:
+
+**`createPartnerWithAssignedCode()` was repurposed, not deleted.** It existed
+only to serve `approveBusinessPartner()` and became dead code. Its validation is
+exactly what the new endpoint needed, so it was rewritten in place as
+`changeAgentCode(agentId, newCode)` rather than deleted and reinvented.
+
+**`sendAgentWelcomeEmail()` also needed the template branch.** The spec only
+named `verifyEmailOTP()`, but the backfill script sends its welcome email
+through `AgentsService.sendAgentWelcomeEmail()`, which was hardcoded to the
+individual template. Backfilled business partners would have received the wrong
+email. Both call sites now branch on `metadata.partnerType`.
+
+**The admin users list did not return agent codes.** `getAllUsersAdmin()`
+selects user columns only, so the rebuilt admin page would have shown an empty
+code column and a permanently unusable custom-code form. Added a `leftJoin` on
+`user.agents` selecting `id`, `agentCode` and `status`. `getCount()` uses
+`COUNT(DISTINCT user.id)` and `getMany()` with `take` uses TypeORM's distinct-id
+strategy, so pagination is unaffected.
+
+**The admin users endpoint returns `{ users: [...] }`, not `{ data: [...] }`.**
+Caught by comparing against `admin/users/page.tsx`, which already unwraps it
+that way.
+
+**The seeder's code pool was still capped at `PTA0205`.** Commit `8fdd41e`
+raised `agents.service.ts` to `PTA9999` but missed
+`database/seeders/planettalk.seeder.ts`. Raised to match. Out of scope
+strictly, but it is the same pool business partners now draw from.
+
+**The frontend's `BUSINESS_PARTNER_REGISTRATION.md` was a byte-identical copy**
+of the backend document and had gone stale. Replaced with a pointer plus
+frontend-specific notes, rather than a second copy to keep in sync.
+
+**Locale files were reflowed.** Rewriting the JSON normalised inconsistent
+indentation and stripped trailing whitespace beyond the 12 removed keys per
+locale. Key parity across all four locales was verified programmatically:
+0 missing, 0 extra under `auth.register`.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `tsc --noEmit` (backend) | clean |
+| `nest build` | clean |
+| `jest` | 69 passed, 6 suites |
+| `tsc --noEmit` (frontend) | clean |
+| `next build` | succeeded |
+| `next lint` on changed files | warnings only (pre-existing `any` patterns) |
+
+Not yet done: the backfill has **not** been run — it is a post-deploy step
+(§11). No staging end-to-end run, and the banners have not been checked in a
+real Gmail or Outlook client.

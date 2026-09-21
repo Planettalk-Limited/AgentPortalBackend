@@ -147,7 +147,6 @@ export class AdminTemplatesController {
       'business-partner-registration-acknowledgement': {
         firstName: 'Sam',
         companyName: 'Acme Telecom Ltd',
-        meetingBookingUrl: 'https://calendly.com/example',
         portalUrl: 'https://portal.example.com/en',
       },
       'individual-partner-verify-email': {
@@ -190,12 +189,6 @@ export class AdminTemplatesController {
         payoutProcessing: 'Monthly on the 15th',
         loginUrl: 'https://portal.example.com/en',
         supportEmail: 'partners@planettalk.com',
-        meetingBookingUrl: 'https://calendly.com/example',
-      },
-      'business-partner-email-verified': {
-        firstName: 'Sam',
-        meetingBookingUrl: 'https://calendly.com/example',
-        portalUrl: 'https://portal.example.com/en',
       },
       'business-application-admin-notify': {
         firstName: 'Sam',

@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { Repository } from 'typeorm';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { User, UserRole } from '../modules/users/entities/user.entity';
+import { User, UserRole, UserStatus } from '../modules/users/entities/user.entity';
 import { Agent, AgentStatus } from '../modules/agents/entities/agent.entity';
 import { AgentsService } from '../modules/agents/agents.service';
 
@@ -24,9 +24,11 @@ import { AgentsService } from '../modules/agents/agents.service';
  *      exactly as activateAgentOnFirstLogin would have
  *   3. send the individual partner welcome email containing the code
  *
- * Business partners (registrationMethod = self_registration_business) are ALWAYS
- * skipped: they legitimately have no agent row until an admin approves them and
- * assigns a custom partner code.
+ * Business partners are included. They used to be skipped because their code was
+ * assigned by an admin at approval; that review step is gone, so they draw from the
+ * same PTA pool as everyone else. This is also the migration path for partners left
+ * stranded in awaiting_partner_approval by the old flow - reach them with
+ * --include-pending.
  *
  * It is idempotent - a user who already has an agent row is skipped - and safe to
  * re-run after a partial failure.
@@ -80,20 +82,18 @@ export type Classification =
  * to — can be tested directly. 'ignore' means "not in scope, say nothing".
  */
 export function classifyOrphan(
-  user: { email: string; status: string; metadata?: Record<string, any> | null },
+  user: {
+    email: string;
+    status: string;
+    emailVerifiedAt?: Date | string | null;
+    metadata?: Record<string, any> | null;
+  },
   opts: ClassifyOptions,
 ): Classification {
   const targeted = opts.only ? opts.only.includes(user.email.toLowerCase()) : false;
 
   if (opts.only && !targeted) {
     return { action: 'ignore' };
-  }
-
-  // Business partners get their code at admin approval - never auto-assign one.
-  // This holds even for --only, so an explicit flag can never mint a code that is
-  // supposed to be chosen by an administrator.
-  if (user.metadata?.registrationMethod === 'self_registration_business') {
-    return { action: 'skip', reason: 'business partner - code assigned at approval' };
   }
 
   // --only is an explicit instruction, so it overrides the filters below.
@@ -106,9 +106,14 @@ export function classifyOrphan(
     }
   }
 
-  // An ACTIVE user has verified their email and logged in, so their agent profile
-  // should be activated too, exactly as activateAgentOnFirstLogin would have.
-  return { action: 'fix', activate: user.status === 'active' };
+  // A verified user should hold a usable code: validateReferralCode() rejects one
+  // whose agent is not active. Status alone is not enough - a partner stuck in
+  // awaiting_partner_approval has verified their email but never reached 'active',
+  // and creating their profile deactivated would hand them a dead code.
+  return {
+    action: 'fix',
+    activate: user.status === 'active' || !!user.emailVerifiedAt,
+  };
 }
 
 function parseOnlyList(): string[] | null {
@@ -227,6 +232,22 @@ async function backfillMissingAgentProfiles() {
             },
           });
           agentStatus = AgentStatus.ACTIVE;
+
+          // A partner left in awaiting_partner_approval holds a live code they
+          // cannot log in to use - nothing moves them now that admin review is
+          // gone, so the status has to be settled here too.
+          if (user.status === UserStatus.AWAITING_PARTNER_APPROVAL) {
+            const restoredMetadata: Record<string, any> = {
+              ...(user.metadata || {}),
+              pendingApproval: false,
+              statusRestoredAt: now.toISOString(),
+              statusRestoredReason: 'approval_gate_removed_backfill',
+            };
+            await usersRepository.update(user.id, {
+              status: UserStatus.ACTIVE,
+              metadata: restoredMetadata,
+            });
+          }
         }
 
         // Step 3 - deliver the code they never received.
