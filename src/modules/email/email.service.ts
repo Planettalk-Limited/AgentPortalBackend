@@ -99,6 +99,21 @@ export class EmailService {
     return fe ? `${fe}/en` : 'http://localhost:3001/en';
   }
 
+  /**
+   * Base URL for static assets. Same host as the portal but without the /en
+   * locale segment, since public/ is not locale-scoped.
+   */
+  getAssetBaseUrl(): string {
+    if (process.env.NODE_ENV === 'production') {
+      return 'https://portal.planettalk.com';
+    }
+    return this.configService.get<string>('FRONTEND_URL') || 'http://localhost:3001';
+  }
+
+  getWelcomeBannerUrl(): string {
+    return `${this.getAssetBaseUrl()}/images/partner-welcome-hero.jpg`;
+  }
+
   async sendIndividualPartnerRegistrationAcknowledgement(
     email: string,
     firstName: string,
@@ -119,10 +134,9 @@ export class EmailService {
     email: string,
     firstName: string,
     companyName: string,
-    meetingBookingUrl: string,
     portalUrl?: string,
   ): Promise<boolean> {
-    const subject = `${firstName}, we received the partner application for ${companyName}`;
+    const subject = `${firstName}, we received the partner registration for ${companyName}`;
     const base = portalUrl ?? this.getPartnerPortalBaseUrl();
     return this.sendEmail({
       to: email,
@@ -131,11 +145,10 @@ export class EmailService {
       templateData: {
         firstName,
         companyName,
-        meetingBookingUrl,
         portalUrl: base,
       },
       previewText:
-        "Verify your email next. Your organisation's account activates after our team approves it.",
+        'Next: verify your email with the code we send in a separate message.',
     });
   }
 
@@ -146,7 +159,7 @@ export class EmailService {
       to: templateData.email,
       subject: `${templateData.firstName}, your Individual Partner account is active`,
       template: 'individual-partner-welcome',
-      templateData,
+      templateData: { ...templateData, bannerUrl: this.getWelcomeBannerUrl() },
       previewText:
         'Your individual partner account is active and ready.',
     });
@@ -157,11 +170,11 @@ export class EmailService {
   ): Promise<boolean> {
     return this.sendEmail({
       to: templateData.email,
-      subject: `${templateData.companyName} has been approved as a PlanetTalk Business Partner`,
+      subject: `${templateData.companyName} is now a PlanetTalk Business Partner`,
       template: 'business-partner-welcome',
-      templateData,
+      templateData: { ...templateData, bannerUrl: this.getWelcomeBannerUrl() },
       previewText:
-        "Your account is active, your partner code is ready, and you can now log in.",
+        'Your account is active, your partner code is ready, and you can now log in.',
     });
   }
 
@@ -496,30 +509,6 @@ export class EmailService {
     });
   }
 
-  async sendBusinessPartnerEmailVerifiedConfirmation(
-    email: string,
-    firstName: string,
-    meetingBookingUrl: string,
-  ): Promise<boolean> {
-    const subject =
-      'Business partner onboarding in progress — step 2 complete';
-
-    return this.sendEmail({
-      to: email,
-      subject,
-      template: 'business-partner-email-verified',
-      templateData: {
-        firstName,
-        meetingBookingUrl,
-        portalUrl: process.env.NODE_ENV === 'production' 
-          ? 'https://portal.planettalk.com/en'
-          : (process.env.FRONTEND_URL ? `${process.env.FRONTEND_URL}/en` : 'http://localhost:3001/en'),
-      },
-      previewText:
-        'Email verified. Your business partner application is now under review.',
-    });
-  }
-
   async sendBusinessApplicationAdminNotification(payload: {
     userId: string;
     email: string;
@@ -531,7 +520,6 @@ export class EmailService {
     businessAddress?: string | null;
     primaryBusinessActivity?: string | null;
     primarySpecialty?: string | null;
-    customerInteractionType?: string | null;
     sellsInternationalGoods?: boolean | null;
     expectedVolume?: string | null;
     region?: string | null;
@@ -562,10 +550,6 @@ export class EmailService {
       );
     }
 
-    const meetingBookingUrl =
-      this.configService.get<string>('PARTNER_MEETING_BOOKING_URL')?.trim() ||
-      '';
-
     const activityLabels: Record<string, string> = {
       grocery_convenience: 'Grocery / Convenience',
       restaurant_cafe: 'Restaurant / Cafe',
@@ -573,12 +557,6 @@ export class EmailService {
       specialty_food_import: 'Specialty Food Import',
       professional_services: 'Professional Services',
       other: 'Other',
-    };
-
-    const interactionLabels: Record<string, string> = {
-      sit_down_table_service: 'Sit-down / Table Service',
-      grab_and_go: 'Grab-and-go / Over the counter',
-      appointment_based: 'Appointment based',
     };
 
     const lines = [
@@ -592,15 +570,11 @@ export class EmailService {
       `Business address: ${payload.businessAddress || '—'}`,
       `Primary business activity: ${payload.primaryBusinessActivity ? (activityLabels[payload.primaryBusinessActivity] || payload.primaryBusinessActivity) : '—'}`,
       `Primary specialty: ${payload.primarySpecialty || '—'}`,
-      `Customer interaction: ${payload.customerInteractionType ? (interactionLabels[payload.customerInteractionType] || payload.customerInteractionType) : '—'}`,
       `Sells international / ethnic goods: ${payload.sellsInternationalGoods != null ? (payload.sellsInternationalGoods ? 'Yes' : 'No') : '—'}`,
       ...(payload.expectedVolume ? [`Expected volume: ${payload.expectedVolume}`] : []),
       ...(payload.region ? [`Region: ${payload.region}`] : []),
       `Company registration: ${payload.companyRegistrationNumber || '—'}`,
       `Email verified (at submit): ${payload.emailVerified ? 'yes' : 'no'}`,
-      meetingBookingUrl
-        ? `Meeting booking link (shown to applicant — e.g. Calendly): ${meetingBookingUrl}`
-        : 'Meeting booking link: (PARTNER_MEETING_BOOKING_URL not set — configure for Calendly)',
     ];
 
     const subject = `[Partner Portal] New business application — ${payload.companyName}`;
@@ -617,25 +591,6 @@ export class EmailService {
         },
       });
     }
-  }
-
-  async sendBusinessPartnerRejectionEmail(payload: {
-    email: string;
-    firstName: string;
-    companyName: string;
-    reason?: string | null;
-  }): Promise<void> {
-    await this.sendEmail({
-      to: payload.email,
-      subject: `PlanetTalk Business Partner application update for ${payload.companyName}`,
-      template: 'business-partner-rejection',
-      templateData: {
-        firstName: payload.firstName,
-        companyName: payload.companyName,
-        reason: payload.reason || null,
-        supportEmail: 'partners@planettalk.com',
-      },
-    });
   }
 
 }

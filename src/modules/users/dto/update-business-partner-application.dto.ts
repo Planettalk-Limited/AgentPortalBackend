@@ -8,10 +8,7 @@ import {
   MaxLength,
 } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import {
-  BusinessActivity,
-  CustomerInteractionType,
-} from '../../auth/dto/register.dto';
+import { BusinessActivity } from '../../auth/dto/register.dto';
 
 export class UpdateBusinessPartnerApplicationDto {
   @ApiPropertyOptional({ description: 'Applicant first name' })
@@ -80,14 +77,6 @@ export class UpdateBusinessPartnerApplicationDto {
   @IsString()
   @MaxLength(200)
   primarySpecialty?: string;
-
-  @ApiPropertyOptional({
-    description: 'How customers typically interact with the business',
-    enum: CustomerInteractionType,
-  })
-  @IsOptional()
-  @IsEnum(CustomerInteractionType)
-  customerInteractionType?: CustomerInteractionType;
 
   @ApiPropertyOptional({
     description:

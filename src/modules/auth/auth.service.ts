@@ -823,11 +823,21 @@ export class AuthService {
       applicationUpdates,
     );
 
+    // There is no review step any more, so resubmitting restores the account
+    // outright rather than parking it in a queue nobody works.
+    const restored = await this.usersService.restoreRejectedBusinessPartner(
+      user.id,
+    );
+
     return {
       ...result,
-      requiresPartnerApproval: true,
+      requiresPartnerApproval: false,
+      status: restored.status,
+      agentCode: restored.agentCode,
       message:
-        'Application updated and moved to review. Our team will notify you after review.',
+        restored.status === UserStatus.ACTIVE
+          ? 'Your details have been updated and your account is active again. Your partner code is in your inbox.'
+          : 'Your details have been updated. Verify your email to activate your account and receive your partner code.',
     };
   }
 
@@ -923,72 +933,6 @@ export class AuthService {
       }
 
       const isBusinessPartner = user.metadata?.partnerType === 'business';
-      const isAlreadyActive = user.status === UserStatus.ACTIVE;
-      const meetingBookingUrl = this.usersService.getPartnerMeetingBookingUrl();
-
-      if (isBusinessPartner) {
-        // If already approved and active, just clear the stale OTP — never downgrade status
-        const newStatus = isAlreadyActive
-          ? UserStatus.ACTIVE
-          : UserStatus.AWAITING_PARTNER_APPROVAL;
-
-        await this.usersService.update(user.id, {
-          emailVerifiedAt: new Date(),
-          status: newStatus,
-          metadata: {
-            ...user.metadata,
-            emailVerificationOTP: null,
-            emailVerificationOTPExpiry: null,
-            emailVerifiedAt: new Date().toISOString(),
-          },
-        });
-
-        if (isAlreadyActive) {
-          // Partner is already approved — treat exactly like a successful individual verification
-          return {
-            success: true,
-            requiresPartnerApproval: false,
-            message: 'Email verified successfully. You can now log in.',
-            user: {
-              id: user.id,
-              email: user.email,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              status: UserStatus.ACTIVE,
-              emailVerified: true,
-            },
-          };
-        }
-
-        try {
-          await this.emailService.sendBusinessPartnerEmailVerifiedConfirmation(
-            user.email,
-            user.firstName,
-            meetingBookingUrl,
-          );
-        } catch (error) {
-          console.error(
-            'Failed to send business partner confirmation email:',
-            error,
-          );
-        }
-
-        return {
-          success: true,
-          requiresPartnerApproval: true,
-          message:
-            'Email verified. Your business partner application is awaiting administrator approval.',
-          meetingBookingUrl,
-          user: {
-            id: user.id,
-            email: user.email,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            status: UserStatus.AWAITING_PARTNER_APPROVAL,
-            emailVerified: true,
-          },
-        };
-      }
 
       await this.usersService.update(user.id, {
         emailVerifiedAt: new Date(),
@@ -1023,7 +967,19 @@ export class AuthService {
             supportEmail: 'partners@planettalk.com',
           };
 
-          await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
+          // Same trigger, same data, same moment for both partner types — only
+          // the template differs, so business partners keep their own copy.
+          if (isBusinessPartner) {
+            const companyName =
+              (user.metadata?.business as { companyName?: string })
+                ?.companyName || 'Your organisation';
+            await this.emailService.sendBusinessPartnerWelcomeEmail({
+              ...emailData,
+              companyName,
+            });
+          } else {
+            await this.emailService.sendIndividualPartnerWelcomeEmail(emailData);
+          }
         }
       } catch (error) {
         console.error('Failed to send welcome email after verification:', error);
@@ -1032,7 +988,6 @@ export class AuthService {
       return {
         success: true,
         message: 'Email verified successfully! Your account is now active and your partner credentials have been sent to your email.',
-        meetingBookingUrl,
         user: {
           id: user.id,
           email: user.email,

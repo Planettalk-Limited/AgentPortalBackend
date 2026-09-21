@@ -25,8 +25,10 @@ export class TemplateService {
     try {
       const template = await this.getTemplate(templateName);
       
-      // Add common data
+      // Add common data. bannerUrl comes first so a caller can override it -
+      // welcome emails swap the header strip for the full welcome hero.
       const templateData = {
+        bannerUrl: `${this.getAssetBaseUrl()}/images/partner-email-header.jpg`,
         ...data,
         currentYear: new Date().getFullYear(),
         showSupport: true,
@@ -38,6 +40,17 @@ export class TemplateService {
       this.logger.error(`Failed to render template ${templateName}:`, error);
       throw new Error(`Template rendering failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Host serving the email banners. Same origin as the partner portal, without
+   * the /en locale segment - public/ is not locale-scoped.
+   */
+  private getAssetBaseUrl(): string {
+    if (process.env.NODE_ENV === 'production') {
+      return 'https://portal.planettalk.com';
+    }
+    return process.env.FRONTEND_URL || 'http://localhost:3001';
   }
 
   /**

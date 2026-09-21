@@ -2,23 +2,23 @@
 
 ## Overview
 
-Agent codes are **automatically assigned** when an agent is created. The system uses sequential assignment within the range **PTA0001 to PTA0205** and automatically checks for duplicates.
+Agent codes are **automatically assigned** when an agent is created. The system uses sequential assignment within the range **PTA0001 to PTA9999** and automatically checks for duplicates.
 
 ## How It Works
 
 ### Automatic Assignment
 When a new agent is created, the system:
 
-1. ✅ Queries all existing agent codes in the range (PTA0001-PTA0205)
+1. ✅ Queries all existing agent codes in the range (PTA0001-PTA9999)
 2. ✅ Finds the **first available code** sequentially
 3. ✅ Assigns it to the new agent
-4. ✅ Throws an error if all 205 codes are exhausted
+4. ✅ Throws an error if all 9999 codes are exhausted
 
 ### Code Format
 - **Prefix**: `PTA`
-- **Range**: `0001` to `0205`
+- **Range**: `0001` to `9999`
 - **Format**: 4-digit number with leading zeros
-- **Examples**: `PTA0001`, `PTA0002`, `PTA0100`, `PTA0205`
+- **Examples**: `PTA0001`, `PTA0002`, `PTA0100`, `PTA9999`
 
 ## Implementation
 
@@ -30,9 +30,9 @@ The `generateAgentCode()` method in `AgentsService` handles automatic assignment
 private async generateAgentCode(): Promise<string> {
   const prefix = 'PTA';
   const minCode = 1;
-  const maxCode = 205;
+  const maxCode = 9999;
 
-  // Get all existing agent codes in the range PTA0001-PTA0205
+  // Get all existing agent codes in the range PTA0001-PTA9999
   const existingAgents = await this.agentsRepository
     .createQueryBuilder('agent')
     .select('agent.agentCode')
@@ -78,7 +78,7 @@ The automatic assignment happens when:
 - Database-level uniqueness enforced
 
 ### ✅ Range Enforcement
-- Only assigns codes between PTA0001 and PTA0205
+- Only assigns codes between PTA0001 and PTA9999
 - Sequential assignment (no random gaps)
 - Clear error message when range is exhausted
 
@@ -91,16 +91,16 @@ The automatic assignment happens when:
 
 ### All Codes Exhausted
 
-If all 205 codes have been assigned, the system throws:
+If all 9999 codes have been assigned, the system throws:
 
 ```
-BadRequestException: All agent codes in the range PTA0001 to PTA0205 have been assigned. Please contact system administrator.
+BadRequestException: All agent codes in the range PTA0001 to PTA9999 have been assigned. Please contact system administrator.
 ```
 
 **Solution**: Extend the range in the code:
 
 ```typescript
-const maxCode = 500; // Increase from 205 to 500
+const maxCode = 20000; // Increase from 9999
 ```
 
 ## Database Schema
@@ -144,13 +144,13 @@ The system handles everything automatically!
 SELECT COUNT(*) as assigned_codes 
 FROM agents 
 WHERE "agentCode" ~ '^PTA0{0,3}[0-9]{1,4}$'
-  AND CAST(SUBSTRING("agentCode" FROM 4) AS INTEGER) BETWEEN 1 AND 205;
+  AND CAST(SUBSTRING("agentCode" FROM 4) AS INTEGER) BETWEEN 1 AND 9999;
 
 -- Count available codes
-SELECT 205 - COUNT(*) as available_codes 
+SELECT 9999 - COUNT(*) as available_codes 
 FROM agents 
 WHERE "agentCode" ~ '^PTA0{0,3}[0-9]{1,4}$'
-  AND CAST(SUBSTRING("agentCode" FROM 4) AS INTEGER) BETWEEN 1 AND 205;
+  AND CAST(SUBSTRING("agentCode" FROM 4) AS INTEGER) BETWEEN 1 AND 9999;
 ```
 
 ### View Assigned Codes
@@ -159,7 +159,7 @@ WHERE "agentCode" ~ '^PTA0{0,3}[0-9]{1,4}$'
 SELECT "agentCode", "createdAt"
 FROM agents
 WHERE "agentCode" LIKE 'PTA%'
-  AND CAST(SUBSTRING("agentCode" FROM 4) AS INTEGER) BETWEEN 1 AND 205
+  AND CAST(SUBSTRING("agentCode" FROM 4) AS INTEGER) BETWEEN 1 AND 9999
 ORDER BY "agentCode";
 ```
 
@@ -171,20 +171,20 @@ ORDER BY "agentCode";
 
 ## Extending the Range
 
-To support more than 205 agents, update the `maxCode` constant:
+To support more than 9999 agents, update the `maxCode` constant:
 
 ### In AgentsService
 
 ```typescript
 // src/modules/agents/agents.service.ts
-const maxCode = 500; // Change from 205 to 500
+const maxCode = 20000; // Change from 9999
 ```
 
 ### In PlanetTalk Seeder
 
 ```typescript
 // src/database/seeders/planettalk.seeder.ts
-const maxCode = 500; // Change from 205 to 500
+const maxCode = 20000; // Change from 9999
 ```
 
 ## Testing
@@ -212,14 +212,36 @@ console.log(agent3.agentCode); // PTA0003
 ### Test Range Exhaustion
 
 ```typescript
-// When all 205 codes are used, this throws an error
+// When all 9999 codes are used, this throws an error
 try {
   await agentsService.createAgentWithReferralData(user);
 } catch (error) {
   console.error(error.message); 
-  // "All agent codes in the range PTA0001 to PTA0205 have been assigned..."
+  // "All agent codes in the range PTA0001 to PTA9999 have been assigned..."
 }
 ```
+
+## Custom Partner Codes
+
+Every partner - individual and business alike - is issued a generic sequential
+code. A business that wants a branded code asks the team, and an administrator
+changes it afterwards:
+
+```
+PATCH /api/v1/admin/agents/:id/agent-code
+{ "agentCode": "AFRO_FOODS_MCR" }
+```
+
+Rules: 3-40 characters, alphanumeric plus `_` and `-`, must start with a letter
+or digit, uppercased on save, uniqueness enforced.
+
+⚠️ The agent code **is** the referral identifier. `validateReferralCode()`
+resolves the current value only, so the previous code stops working the instant
+this succeeds - anything already printed or shared with it goes dead. The old
+code is recorded in `agent.metadata.codeHistory` so support can trace a referral
+that arrives against it.
+
+See `docs/BUSINESS_PARTNER_REGISTRATION.md` for the full partner flow.
 
 ## Related Files
 
@@ -232,7 +254,7 @@ try {
 ✅ **Automatic**: No manual code generation needed  
 ✅ **Sequential**: Codes assigned in order (001, 002, 003...)  
 ✅ **No Duplicates**: Checks existing codes before assignment  
-✅ **Range Validated**: Only assigns codes between 0001-0205  
+✅ **Range Validated**: Only assigns codes between 0001-9999  
 ✅ **Error Handling**: Clear message when all codes are used  
 ✅ **Performance**: Fast lookup using Set data structure  
 

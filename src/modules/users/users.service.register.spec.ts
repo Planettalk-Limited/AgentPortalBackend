@@ -280,18 +280,19 @@ describe('UsersService.register atomicity', () => {
       companyName: 'Example Ltd',
     };
 
-    it('creates no agent profile, since the code is assigned at approval', async () => {
+    it('creates the agent profile atomically, exactly as for an individual', async () => {
       await service.register(businessData);
 
-      expect(agentCreationAttempts).toBe(0);
+      expect(agentCreationAttempts).toBe(1);
       expect(persisted).toHaveLength(1);
     });
 
-    it('reports the business partner path to the caller', async () => {
+    it('reports the business partner path and the reserved code to the caller', async () => {
       const result = await service.register(businessData);
 
       expect(result.partnerType).toBe('business');
-      expect(result.agent).toBeUndefined();
+      expect(result.agent).toBeDefined();
+      expect(result.agent.agentCode).toBeDefined();
     });
   });
 });

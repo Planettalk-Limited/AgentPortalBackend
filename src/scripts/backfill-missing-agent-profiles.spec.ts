@@ -5,8 +5,10 @@ import { classifyOrphan, ClassifyOptions } from './backfill-missing-agent-profil
  *
  * This script writes to live partner accounts and sends real welcome emails, so
  * the rules deciding WHO gets touched matter more than the writes themselves.
- * In particular: business partners must never be auto-assigned a PTA code, since
- * theirs is chosen by an administrator at approval time.
+ *
+ * Business partners are now in scope: admin approval is gone, so they draw a
+ * generic PTA code like everyone else. The script is also the migration path for
+ * partners stranded in awaiting_partner_approval by the old flow.
  */
 describe('classifyOrphan', () => {
   const defaults: ClassifyOptions = {
@@ -21,9 +23,14 @@ describe('classifyOrphan', () => {
     metadata: { registrationMethod: 'self_registration', partnerType: 'individual' },
   });
 
-  const business = (email: string, status: string) => ({
+  const business = (
+    email: string,
+    status: string,
+    emailVerifiedAt: Date | null = null,
+  ) => ({
     email,
     status,
+    emailVerifiedAt,
     metadata: { registrationMethod: 'self_registration_business', partnerType: 'business' },
   });
 
@@ -55,30 +62,51 @@ describe('classifyOrphan', () => {
   });
 
   describe('business partners', () => {
-    it('never auto-assigns a code to a business partner', () => {
-      const user = business('harrtnm+ptbiz1@gmail.com', 'active');
+    it('assigns a code to an active business partner, now that approval is gone', () => {
+      const user = business('ade@afrofoods.co.uk', 'active');
+
+      expect(classifyOrphan(user, defaults)).toEqual({
+        action: 'fix',
+        activate: true,
+      });
+    });
+
+    it('activates a partner stranded in awaiting_partner_approval', () => {
+      // They verified their email - that is how they reached this status - so the
+      // profile must be active or the code we email them will not resolve.
+      const user = business(
+        'kofi@accragrocers.co.uk',
+        'awaiting_partner_approval',
+        new Date('2026-09-01T10:00:00.000Z'),
+      );
+
+      expect(classifyOrphan(user, { ...defaults, includePending: true })).toEqual({
+        action: 'fix',
+        activate: true,
+      });
+    });
+
+    it('leaves an awaiting partner alone without --include-pending', () => {
+      const user = business(
+        'kofi@accragrocers.co.uk',
+        'awaiting_partner_approval',
+        new Date('2026-09-01T10:00:00.000Z'),
+      );
 
       expect(classifyOrphan(user, defaults)).toEqual({
         action: 'skip',
-        reason: 'business partner - code assigned at approval',
+        reason: 'status awaiting_partner_approval - needs --include-pending',
       });
     });
 
-    it('still refuses a business partner when named explicitly by --only', () => {
-      const user = business('harrtnm+ptbiz1@gmail.com', 'active');
-      const opts = { ...defaults, only: ['harrtnm+ptbiz1@gmail.com'] };
-
-      expect(classifyOrphan(user, opts)).toEqual({
-        action: 'skip',
-        reason: 'business partner - code assigned at approval',
-      });
-    });
-
-    it('refuses a business partner even with every override flag set', () => {
+    it('creates an unverified business partner deactivated', () => {
       const user = business('harrtnm+nophone@gmail.com', 'pending');
       const opts = { only: null, includeTest: true, includePending: true };
 
-      expect(classifyOrphan(user, opts).action).toBe('skip');
+      expect(classifyOrphan(user, opts)).toEqual({
+        action: 'fix',
+        activate: false,
+      });
     });
   });
 

@@ -92,8 +92,9 @@ export class UsersService {
   }
 
   /**
-   * Register a new user: individuals get a pending agent profile + auto-generated code;
-   * business partners get user + business metadata only (no agent / code until admin approval).
+   * Register a new user. Every partner gets a pending agent profile with an
+   * auto-generated PTA code, activated once they verify their email. Business
+   * partners additionally carry their company details in metadata.business.
    */
   async register(registerData: {
     firstName: string;
@@ -107,7 +108,6 @@ export class UsersService {
     businessAddress?: string;
     primaryBusinessActivity?: string;
     primarySpecialty?: string;
-    customerInteractionType?: string;
     sellsInternationalGoods?: boolean;
     expectedVolume?: string;
     region?: string;
@@ -126,10 +126,6 @@ export class UsersService {
     const phoneNumber = registerData.phoneNumber?.trim() || null;
     const isBusiness =
       registerData.partnerType === PartnerRegistrationType.BUSINESS;
-
-    const meetingBookingUrl =
-      this.configService.get<string>('PARTNER_MEETING_BOOKING_URL')?.trim() ||
-      '';
 
     const userPayload = {
       firstName: registerData.firstName,
@@ -154,7 +150,6 @@ export class UsersService {
               businessAddress: registerData.businessAddress ?? null,
               primaryBusinessActivity: registerData.primaryBusinessActivity ?? null,
               primarySpecialty: registerData.primarySpecialty ?? null,
-              customerInteractionType: registerData.customerInteractionType ?? null,
               sellsInternationalGoods: registerData.sellsInternationalGoods ?? null,
               expectedVolume: registerData.expectedVolume ?? null,
               region: registerData.region ?? null,
@@ -186,14 +181,15 @@ export class UsersService {
           this.usersRepository.create(userPayload),
         );
 
-        // Business partners get no agent profile here: their code is assigned by an
-        // admin at approval, so there is nothing to keep atomic with the user row.
-        const createdAgent = isBusiness
-          ? null
-          : await this.agentsService.createPendingAgentWithReferralData(
-              createdUser,
-              manager,
-            );
+        // Every partner, business or individual, gets a generic PTA code reserved
+        // here and activated on email verification. Business partners used to be
+        // skipped so an admin could hand-pick a code at approval; that review step
+        // is gone, so there is nothing left to wait for.
+        const createdAgent =
+          await this.agentsService.createPendingAgentWithReferralData(
+            createdUser,
+            manager,
+          );
 
         return { savedUser: createdUser, agentData: createdAgent };
       });
@@ -219,7 +215,6 @@ export class UsersService {
           businessAddress: registerData.businessAddress ?? null,
           primaryBusinessActivity: registerData.primaryBusinessActivity ?? null,
           primarySpecialty: registerData.primarySpecialty ?? null,
-          customerInteractionType: registerData.customerInteractionType ?? null,
           sellsInternationalGoods: registerData.sellsInternationalGoods ?? null,
           expectedVolume: registerData.expectedVolume ?? null,
           region: registerData.region ?? null,
@@ -238,7 +233,6 @@ export class UsersService {
           savedUser.email,
           savedUser.firstName,
           registerData.companyName!,
-          meetingBookingUrl,
           portalUrl,
         );
       } else {
@@ -281,9 +275,8 @@ export class UsersService {
         success: true,
         partnerType: 'business',
         message:
-          'Registration received. Please verify your email. Your application stays pending until our team approves it and assigns your partner code.',
+          'Registration received. Please verify your email to activate your account and receive your partner code.',
         requiresEmailVerification: true,
-        meetingBookingUrl,
         user: {
           id: savedUser.id,
           firstName: savedUser.firstName,
@@ -292,6 +285,12 @@ export class UsersService {
           status: savedUser.status,
           emailVerified: false,
           createdAt: savedUser.createdAt,
+        },
+        agent: {
+          agentCode: agentData.agent.agentCode,
+          tier: agentData.agent.tier,
+          commissionRate: agentData.agent.commissionRate,
+          status: agentData.agent.status,
         },
         pendingVerification: true,
       };
@@ -303,7 +302,6 @@ export class UsersService {
       message:
         'Registration successful! Please check your email for the verification code. After verification, you will receive your partner credentials and welcome information.',
       requiresEmailVerification: true,
-      meetingBookingUrl,
       user: {
         id: savedUser.id,
         firstName: savedUser.firstName,
@@ -320,224 +318,6 @@ export class UsersService {
         status: agentData.agent.status,
       },
       pendingVerification: true,
-    };
-  }
-
-  getPartnerMeetingBookingUrl(): string {
-    return (
-      this.configService.get<string>('PARTNER_MEETING_BOOKING_URL')?.trim() || ''
-    );
-  }
-
-  async listPendingBusinessPartners(
-    statuses: UserStatus[] = [
-      UserStatus.AWAITING_PARTNER_APPROVAL,
-      UserStatus.REJECTED,
-    ],
-  ): Promise<Partial<User>[]> {
-    const allowedStatuses = statuses.length
-      ? statuses
-      : [UserStatus.AWAITING_PARTNER_APPROVAL, UserStatus.REJECTED];
-
-    const rows = await this.usersRepository
-      .createQueryBuilder('user')
-      .select([
-        'user.id',
-        'user.firstName',
-        'user.lastName',
-        'user.email',
-        'user.country',
-        'user.phoneNumber',
-        'user.status',
-        'user.metadata',
-        'user.createdAt',
-        'user.updatedAt',
-      ])
-      .where('user.status IN (:...statuses)', {
-        statuses: allowedStatuses,
-      })
-      .andWhere(`"user".metadata->>'partnerType' = :pt`, { pt: 'business' })
-      .orderBy('user.createdAt', 'DESC')
-      .getMany();
-
-    return rows;
-  }
-
-  async approveBusinessPartner(userId: string, partnerCode: string) {
-    const user = await this.findByIdWithRelations(userId);
-    if (user.metadata?.partnerType !== 'business') {
-      throw new BadRequestException('User is not a business partner registration');
-    }
-    if (
-      user.status !== UserStatus.AWAITING_PARTNER_APPROVAL &&
-      user.status !== UserStatus.REJECTED
-    ) {
-      throw new BadRequestException(
-        'User must be in review or rejected status to be approved',
-      );
-    }
-    if (user.agents?.length) {
-      throw new BadRequestException('Partner profile already exists for this user');
-    }
-
-    const agent = await this.agentsService.createPartnerWithAssignedCode(
-      user.id,
-      partnerCode,
-    );
-
-    const wasRejected = user.status === UserStatus.REJECTED;
-
-    const updatedMetadata: Record<string, any> = {
-      ...user.metadata,
-      pendingApproval: false,
-      partnerApprovedAt: new Date().toISOString(),
-      rejectionReason: null,
-      rejectedAt: null,
-      ...(wasRejected
-        ? {
-            approvalOverrideFromRejected: true,
-            approvalOverrideAt: new Date().toISOString(),
-          }
-        : {}),
-    };
-    await this.usersRepository.update(userId, {
-      status: UserStatus.ACTIVE,
-      isFirstLogin: false,
-      metadata: updatedMetadata,
-    });
-
-    const loginUrl =
-      process.env.NODE_ENV === 'production'
-        ? 'https://portal.planettalk.com/en'
-        : this.configService.get('FRONTEND_URL')
-          ? `${this.configService.get('FRONTEND_URL')}/en`
-          : 'http://localhost:3001/en';
-
-    const companyName =
-      (user.metadata?.business as { companyName?: string })?.companyName ||
-      'Your organisation';
-    const meetingBookingUrl = this.getPartnerMeetingBookingUrl();
-
-    try {
-      await this.emailService.sendBusinessPartnerWelcomeEmail({
-        firstName: user.firstName,
-        lastName: user.lastName,
-        fullName: `${user.firstName} ${user.lastName}`,
-        email: user.email,
-        username: user.email,
-        companyName,
-        agentCode: agent.agentCode,
-        commissionRate: agent.commissionRate.toString(),
-        tier: agent.tier,
-        minimumPayout: '20',
-        payoutProcessing: 'Monthly on the 15th',
-        loginUrl,
-        supportEmail: 'partners@planettalk.com',
-        meetingBookingUrl,
-      });
-    } catch (e) {
-      console.error('Failed to send partner onboarding email:', e);
-    }
-
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        status: UserStatus.ACTIVE,
-      },
-      agent: {
-        id: agent.id,
-        agentCode: agent.agentCode,
-        status: agent.status,
-      },
-    };
-  }
-
-  async rejectBusinessPartner(userId: string, reason?: string) {
-    const user = await this.findById(userId);
-    if (user.metadata?.partnerType !== 'business') {
-      throw new BadRequestException('User is not a business partner registration');
-    }
-    if (
-      user.status !== UserStatus.AWAITING_PARTNER_APPROVAL &&
-      user.status !== UserStatus.PENDING
-    ) {
-      throw new BadRequestException(
-        'User must be pending or awaiting partner approval to be rejected',
-      );
-    }
-
-    user.status = UserStatus.REJECTED;
-    user.metadata = {
-      ...user.metadata,
-      pendingApproval: false,
-      rejectedAt: new Date().toISOString(),
-      rejectionReason: reason || null,
-    };
-
-    await this.usersRepository.save(user);
-
-    const companyName =
-      (user.metadata?.business as { companyName?: string })?.companyName ||
-      'Your organisation';
-
-    try {
-      await this.emailService.sendBusinessPartnerRejectionEmail({
-        email: user.email,
-        firstName: user.firstName,
-        companyName,
-        reason,
-      });
-    } catch (e) {
-      console.error('Failed to send partner rejection email:', e);
-    }
-
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        status: user.status,
-      },
-      message: `Business partner application for ${companyName} has been rejected.`,
-    };
-  }
-
-  async moveBusinessPartnerToReview(userId: string, note?: string) {
-    const user = await this.findById(userId);
-    if (user.metadata?.partnerType !== 'business') {
-      throw new BadRequestException('User is not a business partner registration');
-    }
-    if (user.status !== UserStatus.REJECTED) {
-      throw new BadRequestException(
-        'Only rejected business partner applications can be moved to review',
-      );
-    }
-
-    user.status = UserStatus.AWAITING_PARTNER_APPROVAL;
-    user.metadata = {
-      ...user.metadata,
-      pendingApproval: true,
-      movedToReviewAt: new Date().toISOString(),
-      movedToReviewNote: note || null,
-      previousRejection: {
-        rejectedAt: user.metadata?.rejectedAt || null,
-        rejectionReason: user.metadata?.rejectionReason || null,
-      },
-    };
-
-    await this.usersRepository.save(user);
-
-    return {
-      success: true,
-      user: {
-        id: user.id,
-        email: user.email,
-        status: user.status,
-      },
-      message:
-        'Business partner application has been moved back to review and is ready for approval/rejection.',
     };
   }
 
@@ -569,7 +349,6 @@ export class UsersService {
       businessAddress,
       primaryBusinessActivity,
       primarySpecialty,
-      customerInteractionType,
       sellsInternationalGoods,
       expectedVolume,
       region,
@@ -592,8 +371,6 @@ export class UsersService {
       businessMetadata.primaryBusinessActivity = primaryBusinessActivity;
     if (primarySpecialty !== undefined)
       businessMetadata.primarySpecialty = primarySpecialty;
-    if (customerInteractionType !== undefined)
-      businessMetadata.customerInteractionType = customerInteractionType;
     if (sellsInternationalGoods !== undefined)
       businessMetadata.sellsInternationalGoods = sellsInternationalGoods;
     if (expectedVolume !== undefined)
@@ -602,27 +379,17 @@ export class UsersService {
     if (companyRegistrationNumber !== undefined)
       businessMetadata.companyRegistrationNumber = companyRegistrationNumber;
 
-    const movedFromRejected = user.status === UserStatus.REJECTED;
     const nowIso = new Date().toISOString();
 
+    // Editing details never changes status. This used to push a rejected partner
+    // into AWAITING_PARTNER_APPROVAL, which is now a dead end: no approval step
+    // exists to move them out, login refuses it and validateJwtPayload throws.
+    // Restoring a rejected partner is restoreRejectedBusinessPartner()'s job.
     user.metadata = {
       ...user.metadata,
       business: businessMetadata,
-      pendingApproval: true,
       applicationUpdatedAt: nowIso,
-      ...(movedFromRejected
-        ? {
-            movedToReviewAt: nowIso,
-            movedToReviewReason: 'application_updated_after_rejection',
-            rejectedAt: null,
-            rejectionReason: null,
-          }
-        : {}),
     };
-
-    if (movedFromRejected) {
-      user.status = UserStatus.AWAITING_PARTNER_APPROVAL;
-    }
 
     const saved = await this.usersRepository.save(user);
 
@@ -633,10 +400,138 @@ export class UsersService {
         email: saved.email,
         status: saved.status,
       },
-      message: movedFromRejected
-        ? 'Business partner application updated and moved to review.'
-        : 'Business partner application updated successfully.',
+      message: 'Business partner application updated successfully.',
     };
+  }
+
+  /**
+   * Everything about partner accounts that should not be true any more.
+   *
+   * Removing admin review also removed the page admins used to watch partners
+   * on, so the states that are now anomalies became invisible. Each bucket here
+   * is a way an account can be stuck and never recover on its own:
+   *
+   *  - no agent profile: can log in, /agents/me 404s, dashboard is broken
+   *  - awaiting approval: legacy dead end, nothing transitions out of it
+   *  - rejected: locked out, and with no code, by a rule that no longer exists
+   *
+   * Plus the code pool, which business partners now draw from at registration.
+   */
+  async getPartnerHealth(): Promise<any> {
+    const base = () =>
+      this.usersRepository
+        .createQueryBuilder('user')
+        .leftJoin(
+          'agents',
+          'agent',
+          'agent."userId" = user.id',
+        )
+        .where('user.role = :role', { role: UserRole.AGENT });
+
+    const shape = (rows: any[]) =>
+      rows.map((u) => ({
+        id: u.id,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        status: u.status,
+        emailVerified: !!u.emailVerifiedAt,
+        createdAt: u.createdAt,
+        partnerType: u.metadata?.partnerType ?? 'individual',
+        companyName:
+          (u.metadata?.business as { companyName?: string })?.companyName ?? null,
+      }));
+
+    const missingProfile = await base()
+      .andWhere('agent.id IS NULL')
+      .orderBy('user.createdAt', 'DESC')
+      .getMany();
+
+    const awaitingApproval = await this.usersRepository.find({
+      where: { status: UserStatus.AWAITING_PARTNER_APPROVAL },
+      order: { createdAt: 'DESC' },
+    });
+
+    const rejected = await this.usersRepository.find({
+      where: { status: UserStatus.REJECTED },
+      order: { createdAt: 'DESC' },
+    });
+
+    const unverified = await this.usersRepository.count({
+      where: { role: UserRole.AGENT, status: UserStatus.PENDING },
+    });
+
+    const codePool = await this.agentsService.getCodePoolUsage();
+
+    return {
+      codePool,
+      counts: {
+        missingProfile: missingProfile.length,
+        awaitingApproval: awaitingApproval.length,
+        rejected: rejected.length,
+        unverified,
+      },
+      missingProfile: shape(missingProfile),
+      awaitingApproval: shape(awaitingApproval),
+      rejected: shape(rejected),
+    };
+  }
+
+  /**
+   * Bring a previously rejected business partner back into the normal flow.
+   *
+   * Rejection no longer exists, but accounts rejected under the old flow are
+   * still locked out and - because their code was only ever minted at approval -
+   * have no agent profile either. Flipping the status alone would give them a
+   * login and a dashboard that 404s, which is the failure fef6950 had to clean
+   * up. So this mints the profile too, and only activates the account when the
+   * email is already verified; an unverified partner goes back to PENDING and
+   * activates the moment they verify, exactly like a new registration.
+   */
+  async restoreRejectedBusinessPartner(userId: string): Promise<{
+    status: UserStatus;
+    agentCode: string | null;
+  }> {
+    const user = await this.findByIdWithRelations(userId);
+    const emailVerified = !!user.emailVerifiedAt;
+
+    let agent = user.agents?.[0] ?? null;
+    if (!agent) {
+      const created = await this.agentsService.createPendingAgentWithReferralData(user);
+      agent = created.agent;
+    }
+
+    const nextStatus = emailVerified ? UserStatus.ACTIVE : UserStatus.PENDING;
+
+    const restoredMetadata: Record<string, any> = {
+      ...(user.metadata || {}),
+      pendingApproval: false,
+      rejectedAt: null,
+      rejectionReason: null,
+      restoredFromRejectedAt: new Date().toISOString(),
+    };
+
+    await this.usersRepository.update(userId, {
+      status: nextStatus,
+      metadata: restoredMetadata,
+    });
+
+    // Order matters: validateReferralCode() rejects a code whose agent is not
+    // active, and the welcome email below carries that code.
+    if (emailVerified) {
+      await this.activateVerifiedPartnerAgent(userId);
+      const refreshed = await this.findByIdWithRelations(userId);
+      const activeAgent = refreshed.agents?.[0];
+      if (activeAgent) {
+        try {
+          await this.agentsService.sendAgentWelcomeEmail(refreshed, activeAgent);
+        } catch (err) {
+          console.error('Failed to send welcome email on partner restore:', err);
+        }
+      }
+    }
+
+    return { status: nextStatus, agentCode: agent?.agentCode ?? null };
   }
 
   /**
@@ -855,7 +750,11 @@ export class UsersService {
         'user.metadata',
         'user.createdAt',
         'user.updatedAt',
-      ]);
+      ])
+      // The partner code lives on the agent row. Admin screens list partners by
+      // code, so join it here rather than making them fetch each user separately.
+      .leftJoin('user.agents', 'agent')
+      .addSelect(['agent.id', 'agent.agentCode', 'agent.status']);
 
     if (role) {
       queryBuilder.andWhere('user.role = :role', { role });

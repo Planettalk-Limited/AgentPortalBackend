@@ -16,9 +16,6 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { ApproveBusinessPartnerDto } from './dto/approve-business-partner.dto';
-import { RejectBusinessPartnerDto } from './dto/reject-business-partner.dto';
-import { ReviewBusinessPartnerDto } from './dto/review-business-partner.dto';
 import { UpdateBusinessPartnerApplicationDto } from './dto/update-business-partner-application.dto';
 
 @ApiTags('Admin - User Management')
@@ -54,55 +51,26 @@ export class AdminUsersController {
     return this.usersService.getUserStats();
   }
 
-  @Get('pending-business-partners')
-  @ApiOperation({
-    summary: 'List business partner registrations awaiting approval (Admin)',
-  })
-  @ApiResponse({ status: 200, description: 'List of users' })
-  listPendingBusinessPartners() {
-    return this.usersService.listPendingBusinessPartners();
-  }
 
-  @Post(':id/approve-business-partner')
+  @Get('partner-health')
   @ApiOperation({
     summary:
-      'Approve business partner: assign custom partner code, create partner profile, activate user, send onboarding email (Admin)',
+      'Partner accounts stuck in a state that cannot resolve itself, plus PTA code pool usage (Admin)',
   })
-  @ApiResponse({ status: 200, description: 'Partner approved' })
-  @ApiResponse({ status: 400, description: 'Invalid state or duplicate code' })
-  approveBusinessPartner(
-    @Param('id') id: string,
-    @Body() body: ApproveBusinessPartnerDto,
-  ) {
-    return this.usersService.approveBusinessPartner(id, body.partnerCode);
+  @ApiResponse({ status: 200, description: 'Partner health report' })
+  getPartnerHealth() {
+    return this.usersService.getPartnerHealth();
   }
 
-  @Post(':id/reject-business-partner')
+  @Post(':id/restore-business-partner')
   @ApiOperation({
     summary:
-      'Reject business partner application: update status to rejected and send rejection email (Admin)',
+      'Restore a partner rejected under the old flow: mint their agent profile, clear the rejection, and activate them if their email is verified (Admin)',
   })
-  @ApiResponse({ status: 200, description: 'Partner application rejected' })
-  @ApiResponse({ status: 400, description: 'Invalid state for rejection' })
-  rejectBusinessPartner(
-    @Param('id') id: string,
-    @Body() body: RejectBusinessPartnerDto,
-  ) {
-    return this.usersService.rejectBusinessPartner(id, body.reason);
-  }
-
-  @Post(':id/review-business-partner')
-  @ApiOperation({
-    summary:
-      'Move rejected business partner application back to review so it can be re-evaluated (Admin)',
-  })
-  @ApiResponse({ status: 200, description: 'Partner application moved to review' })
-  @ApiResponse({ status: 400, description: 'Invalid state for review transition' })
-  moveBusinessPartnerToReview(
-    @Param('id') id: string,
-    @Body() body: ReviewBusinessPartnerDto,
-  ) {
-    return this.usersService.moveBusinessPartnerToReview(id, body.note);
+  @ApiResponse({ status: 200, description: 'Partner restored' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  restoreBusinessPartner(@Param('id') id: string) {
+    return this.usersService.restoreRejectedBusinessPartner(id);
   }
 
   @Patch(':id/business-partner-application')

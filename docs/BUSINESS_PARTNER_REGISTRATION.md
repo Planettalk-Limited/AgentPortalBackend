@@ -1,6 +1,8 @@
 # Business Partner Registration — API Reference & Workflow
 
-This document covers the end-to-end lifecycle of a business partner application on the PlanetTalk Partner Portal: registration, email verification, admin review, approval (with custom partner code assignment), rejection, and the partner's first login.
+This document covers the lifecycle of a business partner on the PlanetTalk Partner Portal: registration, email verification, activation, and first login.
+
+> **Changed September 2026.** Business partners no longer go through admin review. They follow exactly the same flow as individual partners and receive a generic `PTA####` code automatically. The approve/reject/review endpoints and the `awaiting_partner_approval` step have been removed. Custom partner codes are now assigned on request, after the fact.
 
 ---
 
@@ -8,14 +10,13 @@ This document covers the end-to-end lifecycle of a business partner application 
 
 1. [Workflow Overview](#1-workflow-overview)
 2. [User Statuses](#2-user-statuses)
-3. [Step 1 — Partner Submits Application](#3-step-1--partner-submits-application)
-4. [Step 2 — Email Verification](#4-step-2--email-verification)
-5. [Step 3 — Admin Reviews Applications](#5-step-3--admin-reviews-applications)
-6. [Step 4A — Admin Approves (Assigns Partner Code)](#6-step-4a--admin-approves-assigns-partner-code)
-7. [Step 4B — Admin Rejects](#7-step-4b--admin-rejects)
-8. [Step 5 — Partner Login](#8-step-5--partner-login)
-9. [Environment Variables](#9-environment-variables)
-10. [Email Templates](#10-email-templates)
+3. [Step 1 — Partner Registers](#3-step-1--partner-registers)
+4. [Step 2 — Email Verification and Activation](#4-step-2--email-verification-and-activation)
+5. [Step 3 — Partner Login](#5-step-3--partner-login)
+6. [Custom Partner Codes](#6-custom-partner-codes)
+7. [Environment Variables](#7-environment-variables)
+8. [Email Templates](#8-email-templates)
+9. [Migrating Partners From the Old Flow](#9-migrating-partners-from-the-old-flow)
 
 ---
 
@@ -25,30 +26,25 @@ This document covers the end-to-end lifecycle of a business partner application 
 Applicant submits form
         │
         ▼
-[Status: pending]
+[Status: pending]  +  Agent profile created (PTA#### reserved, pending_application)
 System: Acknowledgement email → Applicant
-System: Admin notification email → Admin inboxes
+System: Admin notification email → Admin inboxes (FYI only, not a gate)
+System: 6-digit OTP → Applicant
         │
         ▼
 Applicant verifies email (OTP)
         │
         ▼
-[Status: awaiting_partner_approval]
-System: Email verified confirmation → Applicant
+[Status: active]  +  Agent profile activated
+System: Welcome email → Applicant (contains login URL, Partner Code, commission)
         │
-        ├─── Admin REJECTS ──────────────────────────────────────────────────┐
-        │    [Status: rejected]                                              │
-        │    System: Rejection email → Applicant                            │
-        │                                                                   │
-        └─── Admin APPROVES (assigns custom Partner Code) ──────────────────┘
-             [Status: active] + Agent profile created
-             System: Welcome / activation email → Applicant
-                     (contains login URL, Partner Code, commission rate)
-                              │
-                              ▼
-                    Partner logs in to portal
-                    Views assigned Partner Code and dashboard
+        ▼
+Partner logs in and starts sharing their code
 ```
+
+The user row and the agent profile are created in a **single transaction**. If the code cannot be allocated, registration fails cleanly and nothing is persisted — no orphaned accounts. A code collision between two simultaneous registrations is retried automatically.
+
+This is the same flow individual partners follow. The only differences are the business metadata captured at registration, the admin notification, and the choice of email template.
 
 ---
 
@@ -56,14 +52,14 @@ System: Email verified confirmation → Applicant
 
 | Status | Value | Meaning |
 |--------|-------|---------|
-| Pending | `pending` | Application submitted, email not yet verified |
-| Awaiting Approval | `awaiting_partner_approval` | Email verified, waiting for admin decision |
-| Active | `active` | Approved — partner can log in and use the portal |
-| Rejected | `rejected` | Application rejected by admin |
+| Pending | `pending` | Registered, email not yet verified |
+| Active | `active` | Verified — partner can log in and use the portal |
+| Rejected | `rejected` | Legacy only. Nothing sets this any more. |
+| Awaiting Approval | `awaiting_partner_approval` | **Legacy only.** Nothing sets this any more. Retained in the enum because removing a Postgres enum value requires rebuilding the type. See [§9](#9-migrating-partners-from-the-old-flow). |
 
 ---
 
-## 3. Step 1 — Partner Submits Application
+## 3. Step 1 — Partner Registers
 
 ### Endpoint
 
@@ -74,8 +70,6 @@ POST /api/v1/auth/register
 No authentication required.
 
 ### Request Body
-
-All fields below are required for `partnerType: "business"`.
 
 ```json
 {
@@ -90,7 +84,6 @@ All fields below are required for `partnerType: "business"`.
   "businessAddress": "42 High Street, Manchester, M1 2AB",
   "primaryBusinessActivity": "grocery_convenience",
   "primarySpecialty": "African",
-  "customerInteractionType": "grab_and_go",
   "sellsInternationalGoods": true
 }
 ```
@@ -102,18 +95,19 @@ All fields below are required for `partnerType: "business"`.
 | `firstName` | string | Yes | max 100 chars | |
 | `lastName` | string | Yes | max 100 chars | |
 | `email` | string | Yes | valid email, max 255 | Must be unique |
-| `phoneNumber` | string | No | E.164 format e.g. `+447123456789` | |
+| `phoneNumber` | string | No | E.164 e.g. `+447123456789` | |
 | `country` | string | Yes | 2-char ISO 3166-1 e.g. `GB` | |
-| `password` | string | Yes | min 8 chars | Partner sets their own password at registration |
-| `partnerType` | string | Yes | `"business"` | Triggers the business registration flow |
+| `password` | string | Yes | min 8 chars | Partner sets their own |
+| `partnerType` | string | Yes | `"business"` | Selects the business flow |
 | `companyName` | string | Yes* | max 200 chars | Legal or trading name |
-| `businessAddress` | string | Yes* | max 500 chars | Full address including post code |
-| `primaryBusinessActivity` | enum | Yes* | see below | Primary business category |
-| `primarySpecialty` | string | Yes* | max 200 chars | e.g. `African`, `Caribbean`, `South Asian` |
-| `customerInteractionType` | enum | Yes* | see below | How customers engage with the business |
-| `sellsInternationalGoods` | boolean | Yes* | `true` / `false` | Whether the business sells international/ethnic goods |
+| `businessAddress` | string | Yes* | max 500 chars | Include post code |
+| `primaryBusinessActivity` | enum | Yes* | see below | |
+| `primarySpecialty` | string | Yes* | max 200 chars | e.g. `African`, `Caribbean` |
+| `sellsInternationalGoods` | boolean | Yes* | `true` / `false` | |
 
 *Required when `partnerType` is `"business"`.
+
+> **Removed September 2026:** `customerInteractionType`. The fixed options (sit-down, grab-and-go, appointment-based) did not describe retailers such as grocery stores, so the field was dropped rather than extended. Existing records keep the value they were saved with; nothing new writes it.
 
 ### `primaryBusinessActivity` Enum Values
 
@@ -126,41 +120,42 @@ All fields below are required for `partnerType: "business"`.
 | `professional_services` | Professional Services |
 | `other` | Other |
 
-### `customerInteractionType` Enum Values
-
-| Value | Label |
-|-------|-------|
-| `sit_down_table_service` | Sit-down / Table Service |
-| `grab_and_go` | Grab-and-go / Over the counter |
-| `appointment_based` | Appointment based |
-
-### Password Rules
-
-- Minimum 8 characters
-- At least one uppercase letter (frontend enforcement)
-- At least one special character (frontend enforcement)
-
 ### What the System Does
 
+In one transaction:
+
 1. Creates a `users` record with status `pending`, role `agent`.
-2. Stores all business fields in `user.metadata.business`.
-3. Sends an **acknowledgement email** to the applicant (`business-partner-registration-acknowledgement` template).
-4. Sends an **admin notification email** to all inboxes in `ADMIN_BUSINESS_APPLICATION_EMAILS` with the full application details (`business-application-admin-notify` template).
-5. Generates and emails a **6-digit OTP** to the applicant for email verification (`business-partner-verify-email` template).
+2. Stores the business fields in `user.metadata.business`.
+3. Creates the `Agent` profile with the next free `PTA####` code, status `pending_application`.
+
+Then, after commit:
+
+4. Sends an **admin notification** to `ADMIN_BUSINESS_APPLICATION_EMAILS` (`business-application-admin-notify`). Informational — no action required.
+5. Sends an **acknowledgement email** (`business-partner-registration-acknowledgement`).
+6. Sends a **6-digit OTP** (`business-partner-verify-email`).
 
 ### Success Response `201`
 
 ```json
 {
   "success": true,
-  "message": "Registration successful. Please check your email to verify your address.",
+  "partnerType": "business",
+  "message": "Registration received. Please verify your email to activate your account and receive your partner code.",
+  "requiresEmailVerification": true,
   "user": {
     "id": "uuid",
     "email": "ade@afrofoods.co.uk",
     "firstName": "Ade",
     "lastName": "Johnson",
     "status": "pending"
-  }
+  },
+  "agent": {
+    "agentCode": "PTA0206",
+    "tier": "bronze",
+    "commissionRate": 10,
+    "status": "pending_application"
+  },
+  "pendingVerification": true
 }
 ```
 
@@ -169,14 +164,13 @@ All fields below are required for `partnerType: "business"`.
 | HTTP | Condition |
 |------|-----------|
 | `400` | Email already registered, validation failure, missing required fields |
+| `400` | Agent code pool exhausted — nothing is persisted, the partner can retry |
 
 ---
 
-## 4. Step 2 — Email Verification
+## 4. Step 2 — Email Verification and Activation
 
-The applicant receives a 6-digit OTP valid for 15 minutes.
-
-### Verify OTP
+The applicant receives a 6-digit OTP valid for 24 hours.
 
 ```
 POST /api/v1/auth/verify-email
@@ -190,9 +184,11 @@ POST /api/v1/auth/verify-email
 ```
 
 **On success:**
-- Status changes from `pending` → `awaiting_partner_approval`.
-- System sends **email verified confirmation** to the applicant (`business-partner-email-verified` template), which includes the meeting booking link.
-- Partner **cannot log in** yet — their application is in the admin review queue.
+
+- User status `pending` → `active`.
+- The agent profile is activated. This ordering matters: `validateReferralCode()` rejects a code whose agent is not active, and the email below carries that code.
+- The **welcome email** (`business-partner-welcome`) goes out with the login URL, partner code, and commission rate.
+- The partner can log in immediately.
 
 ### Resend OTP
 
@@ -200,248 +196,22 @@ POST /api/v1/auth/verify-email
 POST /api/v1/auth/send-email-verification
 ```
 
-```json
-{
-  "email": "ade@afrofoods.co.uk"
-}
-```
-
 Only works while status is `pending`.
 
 ---
 
-## 5. Step 3 — Admin Reviews Applications
-
-### List All Pending Applications
-
-```
-GET /api/v1/admin/users/pending-business-partners
-Authorization: Bearer <admin-token>
-```
-
-Returns all users with status `awaiting_partner_approval` and `partnerType: "business"`, ordered by submission date (newest first).
-
-### View Application Detail
-
-```
-GET /api/v1/admin/users/:id
-Authorization: Bearer <admin-token>
-```
-
-The full `metadata.business` object contains all registration fields:
-
-```json
-{
-  "id": "uuid",
-  "firstName": "Ade",
-  "lastName": "Johnson",
-  "email": "ade@afrofoods.co.uk",
-  "phoneNumber": "+447123456789",
-  "country": "GB",
-  "status": "awaiting_partner_approval",
-  "metadata": {
-    "partnerType": "business",
-    "pendingApproval": true,
-    "registeredAt": "2026-04-15T10:00:00.000Z",
-    "business": {
-      "companyName": "Afro Foods Ltd",
-      "businessAddress": "42 High Street, Manchester, M1 2AB",
-      "primaryBusinessActivity": "grocery_convenience",
-      "primarySpecialty": "African",
-      "customerInteractionType": "grab_and_go",
-      "sellsInternationalGoods": true
-    }
-  }
-}
-```
-
----
-
-## 6. Step 4A — Admin Approves (Assigns Partner Code)
-
-This is the critical step where the admin assigns a **custom partner code** to the business. The partner code:
-
-- Must be unique across all agents.
-- Must start with an alphanumeric character.
-- Can contain letters, numbers, underscores (`_`) and hyphens (`-`).
-- Minimum 3 characters, maximum 40 characters.
-
-### Endpoint
-
-```
-POST /api/v1/admin/users/:id/approve-business-partner
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-```
-
-### Request Body
-
-```json
-{
-  "partnerCode": "AFRO_FOODS_MCR"
-}
-```
-
-### Partner Code Rules
-
-| Rule | Detail |
-|------|--------|
-| Format | Alphanumeric + `_` or `-` |
-| Must start with | Letter or digit (not `_` or `-`) |
-| Length | 3–40 characters |
-| Case | Case-preserved as entered |
-| Uniqueness | Enforced — returns `400` if already taken |
-
-### Partner Code Naming Convention (Recommended)
-
-Use a format that is recognisable and meaningful:
-
-```
-COMPANY_LOCATION     →  AFRO_FOODS_MCR
-COMPANY_SHORTCODE    →  AFROFOODS
-REGION_BUSINESS      →  MCR_GROCERY_01
-```
-
-### What the System Does
-
-1. Validates user is `awaiting_partner_approval` and has `partnerType: "business"`.
-2. Creates an `Agent` record linked to the user, with the provided `partnerCode` as `agentCode`.
-3. Sets user status to `active`.
-4. Sends a **welcome / activation email** to the partner (`business-partner-welcome` template) containing:
-   - Login URL
-   - Assigned Partner Code
-   - Commission rate and tier
-   - Onboarding instructions
-   - Support contact
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "user": {
-    "id": "uuid",
-    "email": "ade@afrofoods.co.uk",
-    "status": "active"
-  },
-  "agent": {
-    "id": "uuid",
-    "agentCode": "AFRO_FOODS_MCR",
-    "status": "active"
-  }
-}
-```
-
-### Error Responses
-
-| HTTP | Condition |
-|------|-----------|
-| `400` | User not in `awaiting_partner_approval` status |
-| `400` | Partner code already taken |
-| `400` | User is not a business partner registration |
-| `400` | Agent profile already exists for this user |
-| `404` | User not found |
-
----
-
-## 7. Step 4B — Admin Rejects
-
-### Endpoint
-
-```
-POST /api/v1/admin/users/:id/reject-business-partner
-Authorization: Bearer <admin-token>
-Content-Type: application/json
-```
-
-### Request Body
-
-```json
-{
-  "reason": "The business does not meet minimum eligibility criteria for our partner programme at this time."
-}
-```
-
-The `reason` field is optional. If omitted, the rejection email is sent without a reason paragraph.
-
-### What the System Does
-
-1. Validates user is `awaiting_partner_approval` or `pending` and has `partnerType: "business"`.
-2. Sets user status to `rejected`.
-3. Records `rejectedAt` timestamp and `rejectionReason` in `user.metadata`.
-4. Sends a **rejection email** to the applicant (`business-partner-rejection` template) with:
-   - Company name
-   - Rejection reason (if provided)
-   - Support contact
-
-### Success Response `200`
-
-```json
-{
-  "success": true,
-  "user": {
-    "id": "uuid",
-    "email": "ade@afrofoods.co.uk",
-    "status": "rejected"
-  },
-  "message": "Business partner application for Afro Foods Ltd has been rejected."
-}
-```
-
-### Error Responses
-
-| HTTP | Condition |
-|------|-----------|
-| `400` | User not in a rejectable state |
-| `400` | User is not a business partner registration |
-| `404` | User not found |
-
----
-
-## 8. Step 5 — Partner Login
-
-Once approved, the partner logs in with the email and password they set during registration.
+## 5. Step 3 — Partner Login
 
 ```
 POST /api/v1/auth/login
 ```
 
-```json
-{
-  "email": "ade@afrofoods.co.uk",
-  "password": "SecurePass123!"
-}
-```
-
-### Login Response by Status
-
 | Status | Response |
 |--------|----------|
 | `pending` (unverified) | `{ "requiresEmailVerification": true }` — OTP re-sent automatically |
-| `awaiting_partner_approval` | `{ "requiresPartnerApproval": true }` — informs applicant to wait |
-| `rejected` | `{ "rejected": true }` — directs applicant to check their email |
-| `active` | `{ "success": true, "access_token": "..." }` — full JWT issued |
+| `active` | `{ "success": true, "access_token": "..." }` |
 
-### Successful Login Response `200`
-
-```json
-{
-  "success": true,
-  "emailVerified": true,
-  "access_token": "eyJ...",
-  "user": {
-    "id": "uuid",
-    "email": "ade@afrofoods.co.uk",
-    "firstName": "Ade",
-    "lastName": "Johnson",
-    "country": "GB",
-    "role": "agent",
-    "status": "active"
-  }
-}
-```
-
-The partner's **assigned partner code** is available on their profile:
+The partner code is on their profile:
 
 ```
 GET /api/v1/auth/profile
@@ -450,28 +220,114 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 9. Environment Variables
+## 6. Custom Partner Codes
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ADMIN_BUSINESS_APPLICATION_EMAILS` | Yes | Comma-separated admin inboxes for application alerts |
-| `PARTNER_MEETING_BOOKING_URL` | Recommended | Calendly or Google Calendar booking link shown to applicants |
-| `FRONTEND_URL` | Development | Used to construct login URLs in emails (production uses hardcoded portal URL) |
-| `MAILGUN_API_KEY` | Yes | Mailgun API key for sending emails |
-| `MAILGUN_DOMAIN` | Yes | Mailgun domain |
-| `MAILGUN_API_URL` | Yes | Mailgun regional API URL (EU: `https://api.eu.mailgun.net`) |
+Every partner is issued a generic `PTA####` code. A business that wants a branded code contacts the team, and an administrator changes it.
+
+```
+PATCH /api/v1/admin/agents/:id/agent-code
+Authorization: Bearer <admin-token>
+```
+
+```json
+{ "agentCode": "AFRO_FOODS_MCR" }
+```
+
+### Rules
+
+| Rule | Detail |
+|------|--------|
+| Length | 3–40 characters |
+| Charset | Alphanumeric, `_`, `-` |
+| First character | Letter or digit |
+| Uniqueness | Enforced — `400` if taken |
+| Case | Uppercased on save |
+
+### ⚠️ The old code stops working immediately
+
+The agent code **is** the referral identifier. `validateReferralCode()` resolves the current value only, so any flyer, poster, or message already carrying the previous code stops working the moment this succeeds. Confirm with the partner before changing a code they have distributed.
+
+The previous code is recorded in `agent.metadata.codeHistory` so a support query about a dead code can be traced:
+
+```json
+{
+  "codeHistory": [
+    { "from": "PTA0206", "to": "AFRO_FOODS_MCR", "changedAt": "2026-09-21T10:00:00.000Z" }
+  ]
+}
+```
+
+### Error Responses
+
+| HTTP | Condition |
+|------|-----------|
+| `400` | Invalid format or length |
+| `400` | Code already in use |
+| `404` | Agent not found |
+
+Requesting the code the agent already has is a no-op and returns `200`.
 
 ---
 
-## 10. Email Templates
+## 7. Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ADMIN_BUSINESS_APPLICATION_EMAILS` | Yes | Comma-separated admin inboxes for registration alerts |
+| `FRONTEND_URL` | Development | Used for login URLs and email banner URLs (production uses the portal domain) |
+| `MAILGUN_API_KEY` | Yes | Mailgun API key |
+| `MAILGUN_DOMAIN` | Yes | Mailgun domain |
+| `MAILGUN_API_URL` | Yes | Mailgun regional API URL (EU: `https://api.eu.mailgun.net`) |
+
+`PARTNER_MEETING_BOOKING_URL` is no longer read. The onboarding meeting was removed from the signup form — it could not scale to the expected volume and stranded applicants who clicked through to the booking page. The variable can stay in the environment; nothing consumes it.
+
+---
+
+## 8. Email Templates
 
 | Template | File | Trigger |
 |----------|------|---------|
-| Registration acknowledgement | `business-partner-registration-acknowledgement.hbs` | On form submission |
+| Registration acknowledgement | `business-partner-registration-acknowledgement.hbs` | On registration |
 | Email OTP | `business-partner-verify-email.hbs` | On registration and OTP resend |
-| Email verified confirmation | `business-partner-email-verified.hbs` | After OTP verified |
-| Admin application alert | `business-application-admin-notify.hbs` | On form submission → admin inboxes |
-| Welcome / activation | `business-partner-welcome.hbs` | On admin approval |
-| Rejection | `business-partner-rejection.hbs` | On admin rejection |
+| Welcome / activation | `business-partner-welcome.hbs` | On email verification |
+| Admin registration alert | `business-application-admin-notify.hbs` | On registration → admin inboxes |
 
-All templates are Handlebars (`.hbs`) and live in `src/templates/email/`. They use the shared `layouts/base.hbs` layout with `components/header.hbs` and `components/footer.hbs` partials.
+Removed: `business-partner-email-verified.hbs` (announced entry into the review queue) and `business-partner-rejection.hbs` (no rejection path exists).
+
+All templates are Handlebars and live in `src/templates/email/`, using `layouts/base.hbs` with the `components/header.hbs` and `components/footer.hbs` partials.
+
+### Banners
+
+`TemplateService.renderTemplate()` injects a `bannerUrl` default that `header.hbs` renders. Callers can override it:
+
+| Banner | File | Used by |
+|--------|------|---------|
+| Header strip (600×200) | `partner-email-header.jpg` | Default for every template |
+| Welcome hero (1600×800) | `partner-welcome-hero.jpg` | Individual and business welcome emails |
+
+Both are served from the partner portal at `https://portal.planettalk.com/images/`, committed in the `AgentPortal` repo under `public/images/`. They replaced a Google Drive `uc?export=view` link that Gmail and Outlook frequently refused to render.
+
+---
+
+## 9. Migrating Partners From the Old Flow
+
+Partners who registered under the old flow may sit in `awaiting_partner_approval`. They verified their email but were waiting on an administrator. Nothing moves them now, so they must be migrated explicitly.
+
+Use the existing backfill script, which now covers business partners:
+
+```bash
+# 1. Dry run — prints the plan, writes nothing, sends nothing
+npx ts-node src/scripts/backfill-missing-agent-profiles.ts --include-pending
+
+# 2. Canary a single partner
+npx ts-node src/scripts/backfill-missing-agent-profiles.ts --only=ade@afrofoods.co.uk --apply
+
+# 3. Apply to the rest
+npx ts-node src/scripts/backfill-missing-agent-profiles.ts --include-pending --apply
+```
+
+For each partner it allocates a `PTA####` code, creates and activates the agent profile, sets the user to `active`, and sends the welcome email carrying the code. It is idempotent — anyone who already has an agent profile is skipped — and safe to re-run.
+
+`--include-pending` is required because `awaiting_partner_approval` is not `active`. That is deliberate: it keeps a production write behind an explicit flag.
+
+Users in `rejected` are left alone. That was a deliberate business decision and this change does not reverse it; `resubmit-business-partner` remains available to them and now leads to the normal flow.
