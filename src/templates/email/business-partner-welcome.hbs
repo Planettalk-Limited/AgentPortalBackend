@@ -1,27 +1,38 @@
-<p>Hello {{firstName}},</p>
+<p>Hi {{firstName}},</p>
 
-<p><strong>Welcome to PlanetTalk.</strong></p>
-<p>{{companyName}} is now an active PlanetTalk Business Partner.</p>
+<p><strong>Welcome to the PlanetTalk Partner Programme!</strong></p>
 
-<p><strong>Your partner code:</strong> {{agentCode}}<br>
-<strong>Commission:</strong> Earn for up to 24 months per referral</p>
+<p>{{companyName}} is now an active PlanetTalk Business Partner, and your partner code is ready to share with your customers.</p>
 
-<p>You can now start sharing your code with your customers and begin earning.</p>
+<p>To help you get going, we've added <strong>${{welcomeCredit}}</strong> to your partner wallet as a welcome credit towards your first payout. You can request a payout once your balance reaches <strong>${{minimumPayout}}</strong>.</p>
 
-<p><strong>Log in here:</strong> <a href="{{loginUrl}}" style="color: #24B6C3;">{{loginUrl}}</a><br>
-Use the email and password you registered with.</p>
+<div class="info-box success" style="margin: 25px 0;">
+  <p style="margin: 0;"><strong>Your partner code:</strong> {{agentCode}}</p>
+  <p style="margin: 8px 0 0;"><strong>Your referral link:</strong> <a href="{{referralLink}}" style="color: #24B6C3;">{{referralLink}}</a></p>
+</div>
 
-<p><strong>Next steps:</strong></p>
+<p>Prefer a code that reflects your business name? Contact us at <a href="mailto:{{supportEmail}}" style="color: #24B6C3;">{{supportEmail}}</a> and we can arrange one for you.</p>
+
+<h3>Here's how you earn</h3>
+<p>For every customer who signs up with your code and makes their first top-up, you'll earn:</p>
 <ul>
-  <li>Share your partner code with your customers</li>
-  <li>Confirm your business and payout details</li>
-  <li>Track your earnings from your dashboard</li>
+  <li><strong>${{referralReward}} one-off reward</strong> for bringing them to PlanetTalk</li>
+  <li><strong>{{commissionRate}}% commission</strong> on every top-up they make for up to two years, including their first top-up</li>
 </ul>
 
-<p>The more customers who use your code, the more you earn.</p>
+<p>Your customers also get a reason to join: a <strong>100% bonus on their first top-up</strong> when they use your partner code.</p>
 
-<p>Prefer a code that matches your business name? Contact us at <a href="mailto:{{supportEmail}}" style="color: #24B6C3;">{{supportEmail}}</a> and we can arrange a custom code for you.</p>
+<h3>Your first target: 6 paying customers</h3>
+<p>Six new customers will earn you ${{firstTargetReward}} in referral rewards. Add your ${{welcomeCredit}} welcome credit, and your wallet reaches <strong>${{firstTargetTotal}}</strong>, before any top-up commissions are counted.</p>
 
-<p>If you need help, contact us at <a href="mailto:{{supportEmail}}" style="color: #24B6C3;">{{supportEmail}}</a></p>
+<h3>Start sharing today</h3>
+<p>If the people you serve regularly make international calls or send value to loved ones abroad, PlanetTalk is an easy service to recommend, and you'll earn when they top up.</p>
 
-<p>Regards,<br><strong>PlanetTalk Partner Team</strong></p>
+<p>Here's a message you can use:</p>
+<blockquote style="border-left: 4px solid #24B6C3; margin: 15px 0; padding: 10px 15px; background: #f8f9fa;">"Looking for affordable international calls? Try PlanetTalk and get a 100% bonus on your first top-up. Use code {{agentCode}} when you sign up: {{referralLink}}."</blockquote>
+
+<p style="text-align:center;"><a href="{{loginUrl}}" class="button">Open Your Partner Portal</a></p>
+
+<p>Log in to track your referrals, monitor your earnings and work towards your first payout.</p>
+
+<p><strong>The PlanetTalk Team</strong></p>

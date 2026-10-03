@@ -1,8 +1,8 @@
-<p>Hello {{firstName}},</p>
+<p>Hi {{firstName}},</p>
 
-<p><strong>Business partner — verify your email</strong></p>
+<p>You're one step away from activating <strong>{{companyName}}'s</strong> PlanetTalk Business Partner account.</p>
 
-<p>Use the code below to confirm your address and <strong>activate your partner account</strong>. You will then receive your welcome email with your partner code and next steps.</p>
+<p>Enter the code below to confirm your email address. Once verified, we'll complete the next step of your registration and send your welcome email with your unique partner code.</p>
 
 <h3 style="margin-top: 30px;">Your verification code</h3>
 
@@ -10,12 +10,14 @@
     <div style="font-size: 36px; font-weight: bold; color: #24B6C3; letter-spacing: 8px; margin: 10px 0;">{{otp}}</div>
 </div>
 
-<p>Enter this code on the verification screen.</p>
-
 <div class="info-box warning" style="margin: 25px 0;">
     <p style="margin: 0; font-weight: bold;">This code expires in {{expiryDisplay}}.</p>
 </div>
 
-<p><a href="{{portalUrl}}" style="color: #24B6C3;">Open the Partner Portal</a></p>
+<p style="text-align:center;"><a href="{{verifyUrl}}" class="button">Verify My Email</a></p>
+
+<p>If you didn't register as a PlanetTalk Business Partner, you can safely ignore this email.</p>
+
+<p>Questions? Contact us at <a href="mailto:partners@planettalk.com" style="color: #24B6C3;">partners@planettalk.com</a>.</p>
 
 <p>Cheers,<br><strong>The PlanetTalk Partner Team</strong></p>
