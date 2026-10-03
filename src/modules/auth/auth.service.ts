@@ -883,6 +883,7 @@ export class AuthService {
         user.firstName,
         otp,
         partnerType,
+        (user.metadata?.business as { companyName?: string })?.companyName,
       );
 
       return {

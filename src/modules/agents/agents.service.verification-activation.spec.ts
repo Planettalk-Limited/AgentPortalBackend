@@ -13,12 +13,21 @@ describe('AgentsService.activateAgentAfterEmailVerification', () => {
   let service: AgentsService;
   let stored: any;
   let saved: any;
+  let earnings: any[];
 
   beforeEach(() => {
     stored = null;
     saved = undefined;
+    earnings = [];
 
     service = Object.create(AgentsService.prototype);
+    (service as any).earningsRepository = {
+      create: (e: any) => e,
+      save: async (e: any) => {
+        earnings.push(e);
+        return e;
+      },
+    };
     (service as any).agentsRepository = {
       findOne: async () => stored,
       save: async (agent: any) => {
@@ -90,5 +99,77 @@ describe('AgentsService.activateAgentAfterEmailVerification', () => {
 
     expect(result!.status).toBe('active');
     expect(result!.activatedAt).toBe(activatedAt);
+  });
+
+  describe('welcome credit', () => {
+    const pending = () => ({
+      id: 'agent-uuid',
+      userId: 'user-uuid',
+      status: 'pending_application',
+      activatedAt: null,
+      totalEarnings: '0.00',
+      availableBalance: '0.00',
+      metadata: { pendingVerification: true },
+    });
+
+    it('preloads $3 into the wallet of a newly verified partner', async () => {
+      stored = pending();
+
+      const result = await service.activateAgentAfterEmailVerification('user-uuid');
+
+      expect(earnings).toHaveLength(1);
+      expect(earnings[0]).toMatchObject({
+        agentId: 'agent-uuid',
+        type: 'bonus',
+        amount: 3,
+        status: 'confirmed',
+      });
+      expect(result!.availableBalance).toBe(3);
+      expect(result!.totalEarnings).toBe(3);
+      expect(result!.metadata.welcomeCreditAwardedAt).toBeDefined();
+    });
+
+    it('never pays the credit twice', async () => {
+      stored = pending();
+      await service.activateAgentAfterEmailVerification('user-uuid');
+      stored.status = 'credentials_sent';
+
+      await service.activateAgentAfterEmailVerification('user-uuid');
+
+      expect(earnings).toHaveLength(1);
+      expect(stored.availableBalance).toBe(3);
+    });
+
+    it('does not credit a profile that was already active', async () => {
+      stored = { ...pending(), status: 'active' };
+
+      await service.activateAgentAfterEmailVerification('user-uuid');
+
+      expect(earnings).toHaveLength(0);
+    });
+
+    it('can be switched off for the legacy backfill', async () => {
+      stored = pending();
+
+      await service.activateAgentAfterEmailVerification('user-uuid', {
+        awardWelcomeCredit: false,
+      });
+
+      expect(earnings).toHaveLength(0);
+      expect(stored.status).toBe('active');
+    });
+
+    it('still activates the partner if crediting fails', async () => {
+      stored = pending();
+      (service as any).earningsRepository.save = async () => {
+        throw new Error('db down');
+      };
+      jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      const result = await service.activateAgentAfterEmailVerification('user-uuid');
+
+      expect(result!.status).toBe('active');
+      expect(result!.availableBalance).toBe('0.00');
+    });
   });
 });

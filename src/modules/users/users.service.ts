@@ -265,6 +265,7 @@ export class UsersService {
         userForOtp.firstName,
         otp,
         isBusiness ? 'business' : 'individual',
+        registerData.companyName,
       );
     } catch (emailError) {
       console.error('Failed to send verification email:', emailError);

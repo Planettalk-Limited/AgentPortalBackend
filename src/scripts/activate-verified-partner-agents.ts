@@ -26,6 +26,9 @@ import { AgentsService } from '../modules/agents/agents.service';
  * Apply:
  *   npx ts-node src/scripts/activate-verified-partner-agents.ts --apply
  *
+ * Awards no welcome credit: the $3 preload is for newly verified partners, and
+ * these were verified long before it existed.
+ *
  * Sends no email: these partners already received their welcome email, carrying the
  * code, when they verified. This only makes that code work.
  */
@@ -94,7 +97,9 @@ async function activateVerifiedPartnerAgents() {
       }
 
       try {
-        const agent = await agentsService.activateAgentAfterEmailVerification(user.id);
+        const agent = await agentsService.activateAgentAfterEmailVerification(user.id, {
+          awardWelcomeCredit: false,
+        });
         if (agent?.status === AgentStatus.ACTIVE) {
           console.log(`  ACTIVATED       ${user.email}  -> ${agent.agentCode}`);
           changed++;

@@ -25,6 +25,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType, NotificationPriority } from '../notifications/entities/notification.entity';
 import { ApplicationStatus } from './entities/agent-application.entity';
 
+import { WELCOME_CREDIT_AMOUNT, calculateUploadedAvailableBalance } from './agents.constants';
+
 @Injectable()
 export class AgentsService {
   constructor(
@@ -894,7 +896,10 @@ export class AgentsService {
    * Returns null when the user has no agent profile at all. Profiles an admin
    * deliberately switched off are returned untouched, never resurrected.
    */
-  async activateAgentAfterEmailVerification(userId: string): Promise<Agent | null> {
+  async activateAgentAfterEmailVerification(
+    userId: string,
+    options: { awardWelcomeCredit?: boolean } = {},
+  ): Promise<Agent | null> {
     const agent = await this.agentsRepository.findOne({ where: { userId } });
 
     if (!agent) {
@@ -920,7 +925,54 @@ export class AgentsService {
       activatedBy: 'email_verification',
     };
 
-    return this.agentsRepository.save(agent);
+    const activated = await this.agentsRepository.save(agent);
+
+    if (options.awardWelcomeCredit !== false) {
+      return this.awardWelcomeCredit(activated);
+    }
+    return activated;
+  }
+
+  /**
+   * Preload a newly verified partner's wallet with the welcome credit.
+   *
+   * Runs only on the pending -> active transition, and the metadata flag makes it
+   * safe to call twice, so a re-run of activation can never pay out a second time.
+   * The credit is a normal confirmed BONUS earning so it shows in their history and
+   * counts towards the minimum payout. A failure here must not block activation:
+   * the partner still gets their code, and the missing credit is logged.
+   */
+  private async awardWelcomeCredit(agent: Agent): Promise<Agent> {
+    if (agent.metadata?.welcomeCreditAwardedAt) {
+      return agent;
+    }
+
+    try {
+      const now = new Date();
+      await this.earningsRepository.save(
+        this.earningsRepository.create({
+          agentId: agent.id,
+          type: EarningType.BONUS,
+          amount: WELCOME_CREDIT_AMOUNT,
+          description: 'Welcome credit',
+          earnedAt: now,
+          status: EarningStatus.CONFIRMED,
+          metadata: { source: 'welcome_credit' },
+        }),
+      );
+
+      agent.totalEarnings = Number(agent.totalEarnings) + WELCOME_CREDIT_AMOUNT;
+      agent.availableBalance = Number(agent.availableBalance) + WELCOME_CREDIT_AMOUNT;
+      agent.metadata = {
+        ...agent.metadata,
+        welcomeCreditAwardedAt: now.toISOString(),
+        welcomeCreditAmount: WELCOME_CREDIT_AMOUNT,
+      };
+      return await this.agentsRepository.save(agent);
+    } catch (error) {
+      console.error(`Failed to award welcome credit to agent ${agent.id}:`, error);
+      return agent;
+    }
   }
 
   /**
@@ -3222,7 +3274,12 @@ export class AgentsService {
           const totalEarningsValue = agentData.totalEarnings ?? agent.totalEarnings ?? 0;
           const totalBonusValue = agentData.totalReferralBonusIncome ?? agent.totalReferralBonusIncome ?? 0;
           const totalPayoutValue = agentData.totalPayoutAmount ?? agent.metadata?.totalPayoutAmount ?? 0;
-          updateData.availableBalance = (Number(totalEarningsValue) + Number(totalBonusValue)) - Number(totalPayoutValue);
+          updateData.availableBalance = calculateUploadedAvailableBalance({
+            totalEarnings: totalEarningsValue,
+            totalReferralBonusIncome: totalBonusValue,
+            totalPayoutAmount: totalPayoutValue,
+            welcomeCreditAmount: agent.metadata?.welcomeCreditAmount,
+          });
           updatedFields.push('availableBalance (calculated)');
 
           if (agentData.totalReferrals !== undefined) {

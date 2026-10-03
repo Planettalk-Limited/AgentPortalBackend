@@ -151,6 +151,7 @@ export class AdminTemplatesController {
       },
       'individual-partner-verify-email': {
         firstName: 'Jane',
+        verifyUrl: 'https://portal.example.com/en/auth/verify-email',
         otp: '123456',
         expiryMinutes: 1440,
         expiryHours: 24,
@@ -160,6 +161,8 @@ export class AdminTemplatesController {
       },
       'business-partner-verify-email': {
         firstName: 'Sam',
+        companyName: 'Acme Telecom Ltd',
+        verifyUrl: 'https://portal.example.com/en/auth/verify-email',
         otp: '654321',
         expiryMinutes: 1440,
         expiryHours: 24,
@@ -177,6 +180,11 @@ export class AdminTemplatesController {
         payoutProcessing: 'Monthly on the 15th',
         loginUrl: 'https://portal.example.com/en',
         supportEmail: 'partners@planettalk.com',
+        welcomeCredit: 3,
+        referralReward: 3,
+        firstTargetReward: 18,
+        firstTargetTotal: 21,
+        referralLink: 'https://portal.example.com/en/referral/PTA0099',
       },
       'business-partner-welcome': {
         firstName: 'Sam',
@@ -189,6 +197,11 @@ export class AdminTemplatesController {
         payoutProcessing: 'Monthly on the 15th',
         loginUrl: 'https://portal.example.com/en',
         supportEmail: 'partners@planettalk.com',
+        welcomeCredit: 3,
+        referralReward: 3,
+        firstTargetReward: 18,
+        firstTargetTotal: 21,
+        referralLink: 'https://portal.example.com/en/referral/ACME_UK',
       },
       'business-application-admin-notify': {
         firstName: 'Sam',

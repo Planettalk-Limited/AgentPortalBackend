@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Mailgun from 'mailgun.js';
 import * as FormData from 'form-data';
 import { TemplateService, TemplateData } from './template.service';
+import { WELCOME_CREDIT_AMOUNT } from '../agents/agents.constants';
 
 export interface EmailOptions {
   to: string;
@@ -13,6 +14,11 @@ export interface EmailOptions {
   templateData?: TemplateData;
   previewText?: string;
 }
+
+/** Figures quoted in the partner welcome email (USD). */
+const WELCOME_CREDIT = WELCOME_CREDIT_AMOUNT;
+const REFERRAL_REWARD = 3;
+const FIRST_TARGET_CUSTOMERS = 6;
 
 @Injectable()
 export class EmailService {
@@ -114,12 +120,34 @@ export class EmailService {
     return `${this.getAssetBaseUrl()}/images/partner-welcome-hero.jpg`;
   }
 
+  /**
+   * Fills in the figures the partner welcome emails quote, so the copy cannot drift
+   * from the numbers the wallet actually uses. The referral reward is the one-off
+   * amount paid per referred customer's first top-up.
+   */
+  private buildPartnerWelcomeData(
+    templateData: Record<string, any>,
+  ): Record<string, any> {
+    const firstTargetReward = FIRST_TARGET_CUSTOMERS * REFERRAL_REWARD;
+    const base = this.getPartnerPortalBaseUrl();
+    return {
+      ...templateData,
+      bannerUrl: this.getWelcomeBannerUrl(),
+      welcomeCredit: WELCOME_CREDIT,
+      referralReward: REFERRAL_REWARD,
+      commissionRate: Number(templateData.commissionRate),
+      firstTargetReward,
+      firstTargetTotal: firstTargetReward + WELCOME_CREDIT,
+      referralLink: `${base}/referral/${encodeURIComponent(templateData.agentCode)}`,
+    };
+  }
+
   async sendIndividualPartnerRegistrationAcknowledgement(
     email: string,
     firstName: string,
     portalUrl?: string,
   ): Promise<boolean> {
-    const subject = `${firstName}, we received your individual partner registration`;
+    const subject = 'Thanks for registering as a PlanetTalk Partner';
     const base = portalUrl ?? this.getPartnerPortalBaseUrl();
     return this.sendEmail({
       to: email,
@@ -136,7 +164,7 @@ export class EmailService {
     companyName: string,
     portalUrl?: string,
   ): Promise<boolean> {
-    const subject = `${firstName}, we received the partner registration for ${companyName}`;
+    const subject = `Thanks for registering ${companyName} as a PlanetTalk Business Partner`;
     const base = portalUrl ?? this.getPartnerPortalBaseUrl();
     return this.sendEmail({
       to: email,
@@ -157,11 +185,10 @@ export class EmailService {
   ): Promise<boolean> {
     return this.sendEmail({
       to: templateData.email,
-      subject: `${templateData.firstName}, your Individual Partner account is active`,
+      subject: "You're approved! Your PlanetTalk partner code is ready",
       template: 'individual-partner-welcome',
-      templateData: { ...templateData, bannerUrl: this.getWelcomeBannerUrl() },
-      previewText:
-        'Your individual partner account is active and ready.',
+      templateData: this.buildPartnerWelcomeData(templateData),
+      previewText: `We've added $${WELCOME_CREDIT} to your partner wallet. Your code is ready to share.`,
     });
   }
 
@@ -170,11 +197,10 @@ export class EmailService {
   ): Promise<boolean> {
     return this.sendEmail({
       to: templateData.email,
-      subject: `${templateData.companyName} is now a PlanetTalk Business Partner`,
+      subject: `You're approved! ${templateData.companyName}'s PlanetTalk partner code is ready`,
       template: 'business-partner-welcome',
-      templateData: { ...templateData, bannerUrl: this.getWelcomeBannerUrl() },
-      previewText:
-        'Your account is active, your partner code is ready, and you can now log in.',
+      templateData: this.buildPartnerWelcomeData(templateData),
+      previewText: `We've added $${WELCOME_CREDIT} to your partner wallet. Your code is ready to share.`,
     });
   }
 
@@ -483,12 +509,14 @@ export class EmailService {
     firstName: string,
     otp: string,
     partnerType: 'individual' | 'business' = 'individual',
+    companyName?: string,
   ): Promise<boolean> {
     const portalUrl = this.getPartnerPortalBaseUrl();
+    const verifyUrl = `${portalUrl}/auth/verify-email?email=${encodeURIComponent(email)}`;
     const isBusiness = partnerType === 'business';
     const subject = isBusiness
-      ? 'Verify your email — business partner application'
-      : 'Verify your email — individual partner account';
+      ? `Verify your email. ${companyName || 'Your business'}'s partner code is waiting.`
+      : 'Verify your email. Your partner code is waiting.';
     const template = isBusiness
       ? 'business-partner-verify-email'
       : 'individual-partner-verify-email';
@@ -499,12 +527,14 @@ export class EmailService {
       template,
       templateData: {
         firstName,
+        companyName: companyName || 'Your business',
         otp,
         expiryHours: 24,
         expiryMinutes: 1440,
         expiryDisplay: '24 hours',
         verificationTime: new Date().toLocaleString(),
         portalUrl,
+        verifyUrl,
       },
     });
   }
