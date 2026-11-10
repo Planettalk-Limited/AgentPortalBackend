@@ -25,7 +25,11 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType, NotificationPriority } from '../notifications/entities/notification.entity';
 import { ApplicationStatus } from './entities/agent-application.entity';
 
-import { WELCOME_CREDIT_AMOUNT, calculateUploadedAvailableBalance } from './agents.constants';
+import {
+  WELCOME_CREDIT_AMOUNT,
+  calculateUploadedAvailableBalance,
+  findUploadedEarningsProblem,
+} from './agents.constants';
 
 @Injectable()
 export class AgentsService {
@@ -3220,6 +3224,7 @@ export class AgentsService {
       successful: 0,
       failed: 0,
       details: [],
+      updatedAgents: [],
       batchId,
       uploadedAt: new Date(),
     };
@@ -3228,7 +3233,7 @@ export class AgentsService {
       for (const agentData of bulkDataUploadDto.agentsData) {
         const detailResult: any = {
           agentCode: agentData.agentCode,
-          status: 'error',
+          status: 'failed',
           message: '',
           updatedFields: [],
         };
@@ -3249,6 +3254,17 @@ export class AgentsService {
 
           // Capture current totals for delta computation
           const previousTotalEarnings = Number(agent.totalEarnings) || 0;
+
+          // Refuse rows that would zero or undercut the stored total (e.g. a blank
+          // Total Earnings column) instead of silently reporting them as a success.
+          const uploadProblem = findUploadedEarningsProblem(agentData, agent.totalEarnings);
+          if (uploadProblem) {
+            detailResult.error = uploadProblem;
+            detailResult.message = uploadProblem;
+            result.details.push(detailResult);
+            result.failed++;
+            continue;
+          }
 
           // Update agent data
           const updateData: any = {};
@@ -3434,6 +3450,7 @@ export class AgentsService {
           detailResult.message = `Agent data updated successfully`;
           detailResult.updatedFields = updatedFields;
           result.details.push(detailResult);
+          result.updatedAgents.push(agentData.agentCode);
           result.successful++;
 
         } catch (error) {
