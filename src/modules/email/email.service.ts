@@ -13,6 +13,27 @@ export interface EmailOptions {
   template?: string;
   templateData?: TemplateData;
   previewText?: string;
+  /** Mailgun-only send options (tags, tracking, custom variables, extra headers). */
+  mailgun?: MailgunSendOptions;
+}
+
+export interface MailgunSendOptions {
+  /** Up to 3 tags per message (Mailgun limit); used for per-template analytics. */
+  tags?: string[];
+  trackOpens?: boolean;
+  trackClicks?: boolean;
+  /** Sent as X-Mailgun-Variables and echoed back in webhook "user-variables". */
+  variables?: Record<string, string>;
+  /** Extra MIME headers, e.g. List-Unsubscribe. */
+  headers?: Record<string, string>;
+}
+
+export interface EmailSendResult {
+  success: boolean;
+  /** Mailgun message id without angle brackets; absent in simulation mode or on failure. */
+  messageId?: string;
+  simulated?: boolean;
+  error?: string;
 }
 
 /** Figures quoted in the partner welcome email (USD). */
@@ -205,6 +226,12 @@ export class EmailService {
   }
 
   async sendEmail(options: EmailOptions): Promise<boolean> {
+    const result = await this.sendEmailWithResult(options);
+    return result.success;
+  }
+
+  /** Same as sendEmail, but reports the Mailgun message id so callers can match webhook events. */
+  async sendEmailWithResult(options: EmailOptions): Promise<EmailSendResult> {
     const startTime = Date.now();
     const emailId = `email_${startTime}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -237,15 +264,16 @@ export class EmailService {
         this.logger.log(`📧 [${emailId}] [EMAIL SIMULATION] To: ${options.to}`);
         this.logger.log(`📧 [${emailId}] [EMAIL SIMULATION] Subject: ${options.subject}`);
         this.logger.log(`📧 [${emailId}] [EMAIL SIMULATION] Content: ${(html || options.text || '').substring(0, 200)}...`);
-        return true;
+        return { success: true, simulated: true };
       }
 
-      const emailData = {
+      const emailData: Record<string, any> = {
         from: this.fromEmail,
         to: [options.to],
         subject: options.subject,
         html: html,
         text: options.text,
+        ...EmailService.buildMailgunFields(options.mailgun),
       };
 
       this.logger.debug(`📧 [${emailId}] Sending via Mailgun...`);
@@ -269,7 +297,10 @@ export class EmailService {
         this.logger.debug(`📧 [${emailId}] Mailgun response: ${result.message}`);
       }
 
-      return true;
+      return {
+        success: true,
+        messageId: result.id ? String(result.id).replace(/^<|>$/g, '') : undefined,
+      };
     } catch (error) {
       const totalTime = Date.now() - startTime;
       this.logger.error(`❌ [${emailId}] Failed to send email after ${totalTime}ms`);
@@ -291,8 +322,27 @@ export class EmailService {
         this.logger.error(`📧 [${emailId}] 🚨 AUTHORIZATION ERROR: Domain may not be verified in Mailgun`);
       }
 
-      return false;
+      return { success: false, error: error?.message || 'Unknown error' };
     }
+  }
+
+  /** Translates MailgunSendOptions into the o:/h: fields messages.create expects. */
+  static buildMailgunFields(opts?: MailgunSendOptions): Record<string, any> {
+    if (!opts) return {};
+    const fields: Record<string, any> = {};
+    if (opts.tags?.length) fields['o:tag'] = opts.tags.slice(0, 3);
+    if (opts.trackOpens !== undefined || opts.trackClicks !== undefined) {
+      fields['o:tracking'] = 'yes';
+    }
+    if (opts.trackOpens !== undefined) fields['o:tracking-opens'] = opts.trackOpens ? 'yes' : 'no';
+    if (opts.trackClicks !== undefined) fields['o:tracking-clicks'] = opts.trackClicks ? 'htmlonly' : 'no';
+    if (opts.variables && Object.keys(opts.variables).length) {
+      fields['h:X-Mailgun-Variables'] = JSON.stringify(opts.variables);
+    }
+    for (const [name, value] of Object.entries(opts.headers || {})) {
+      fields[`h:${name}`] = value;
+    }
+    return fields;
   }
 
   async sendAgentApplicationAcknowledgment(

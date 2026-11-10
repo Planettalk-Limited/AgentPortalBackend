@@ -65,6 +65,7 @@
     "@nestjs/jwt": "^10.1.1",
     "@nestjs/passport": "^10.0.2",
     "@nestjs/platform-express": "^10.2.7",
+    "@nestjs/schedule": "^4.1.2",
     "@nestjs/swagger": "^7.1.14",
     "@nestjs/typeorm": "^10.0.0",
     "@types/handlebars": "^4.0.40",
