@@ -21,10 +21,11 @@ import { ResourcesService } from './resources.service';
 import { CreateResourceDto } from './dto/create-resource.dto';
 import { UpdateResourceDto, ResourceQueryDto } from './dto/update-resource.dto';
 import { Resource } from './entities/resource.entity';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - Resource Management')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/resources')
 export class AdminResourcesController {
   constructor(private readonly resourcesService: ResourcesService) {}

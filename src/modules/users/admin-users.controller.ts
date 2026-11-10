@@ -17,10 +17,11 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { AdminCreateUserDto } from './dto/admin-create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateBusinessPartnerApplicationDto } from './dto/update-business-partner-application.dto';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - User Management')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/users')
 export class AdminUsersController {
   constructor(private readonly usersService: UsersService) {}

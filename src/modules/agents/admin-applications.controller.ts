@@ -11,10 +11,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthGuard } from '@nestjs/passport';
 import { AgentsService } from './agents.service';
 import { ReviewApplicationDto } from './dto/review-application.dto';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - Agent Applications')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/agents/applications')
 export class AdminApplicationsController {
   constructor(private readonly agentsService: AgentsService) {}

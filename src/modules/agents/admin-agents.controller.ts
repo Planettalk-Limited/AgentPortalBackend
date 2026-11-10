@@ -16,10 +16,11 @@ import { CreateAgentDto } from './dto/create-agent.dto';
 import { UpdateAgentDto } from './dto/update-agent.dto';
 import { ChangeAgentCodeDto } from './dto/change-agent-code.dto';
 import { UpdateAgentEarningsDto, UpdateAgentReferralsDto, BulkUpdateEarningsDto, BulkUpdateReferralsDto, UpdateAgentStatsDto, BulkUpdateAgentStatsDto, UpdateAgentStatsByCodeDto, BulkUpdateAgentStatsByCodeDto } from './dto/update-agent-stats.dto';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - Agent Management')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/agents')
 export class AdminAgentsController {
   constructor(private readonly agentsService: AgentsService) {}

@@ -9,10 +9,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthGuard } from '@nestjs/passport';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto, CreateBulkNotificationDto } from './dto/create-notification.dto';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - Notifications')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/notifications')
 export class AdminNotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}

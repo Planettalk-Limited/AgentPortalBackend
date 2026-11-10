@@ -13,10 +13,11 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagg
 import { AuthGuard } from '@nestjs/passport';
 import { TrainingService } from './training.service';
 import { CreateTrainingMaterialDto, UpdateTrainingMaterialDto } from './dto/create-training-material.dto';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - Training & Resources')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/training')
 export class AdminTrainingController {
   constructor(private readonly trainingService: TrainingService) {}

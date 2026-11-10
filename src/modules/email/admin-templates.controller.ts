@@ -12,10 +12,11 @@ import { AuthGuard } from '@nestjs/passport';
 
 import { TemplateService } from './template.service';
 import { EmailService } from './email.service';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - Email Templates')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/email-templates')
 export class AdminTemplatesController {
   constructor(

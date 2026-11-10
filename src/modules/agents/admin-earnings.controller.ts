@@ -13,10 +13,11 @@ import { AgentsService } from './agents.service';
 import { CreateEarningAdjustmentDto } from './dto/create-earning-adjustment.dto';
 import { BulkEarningsUploadDto, BulkEarningsUploadResultDto } from './dto/bulk-earnings-upload.dto';
 import { BulkEarningsDataUploadDto, BulkEarningsDataUploadResultDto } from './dto/earnings-data-upload.dto';
+import { AdminRoleGuard } from '../auth/guards/admin-role.guard';
 
 @ApiTags('Admin - Earnings Management')
 @ApiBearerAuth()
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard('jwt'), AdminRoleGuard)
 @Controller('admin/earnings')
 export class AdminEarningsController {
   constructor(private readonly agentsService: AgentsService) {}
