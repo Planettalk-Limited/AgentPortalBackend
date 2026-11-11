@@ -54,6 +54,13 @@ export class AdminLifecycleEmailsController {
     };
   }
 
+  @Get('groups/:group')
+  @ApiOperation({ summary: 'Partners currently in one lifecycle group (new, active, inactive, ...)' })
+  getGroup(@Param('group') group: string) {
+    if (!LifecycleTrackingService.isPartnerGroup(group)) throw new BadRequestException('Unknown group');
+    return this.tracking.getGroupMembers(group);
+  }
+
   @Get('partners/:agentId')
   @ApiOperation({ summary: 'One partner: lifecycle state and every lifecycle email logged for them' })
   getPartner(@Param('agentId', ParseUUIDPipe) agentId: string) {

@@ -94,7 +94,7 @@ describe('LifecycleTrackingService.recordMailgunEvent', () => {
       },
     };
     const states = { findOne: jest.fn(async () => ({ agentId: 'agent-1', unsubscribedAt: null })), update: jest.fn() };
-    const service = new LifecycleTrackingService(emails as any, events as any, states as any, {} as any);
+    const service = new LifecycleTrackingService(emails as any, events as any, states as any, {} as any, {} as any, { get: () => undefined } as any);
     return { service, updates, states };
   }
 

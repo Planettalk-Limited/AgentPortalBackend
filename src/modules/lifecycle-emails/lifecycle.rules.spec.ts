@@ -4,6 +4,7 @@ import {
   LifecycleStateView,
   PartnerSnapshot,
   calendarDaysBetween,
+  classifyPartner,
   commissionEarningsOf,
   decide,
   eligibilityOf,
@@ -334,5 +335,50 @@ describe('lifecycle rules', () => {
       expect(calendarDaysBetween(new Date('2026-03-31T23:30:00Z'), new Date('2026-04-01T08:00:00Z'), 'Europe/London')).toBe(0);
       expect(calendarDaysBetween(new Date('2026-03-31T22:30:00Z'), new Date('2026-04-01T08:00:00Z'), 'Europe/London')).toBe(1);
     });
+  });
+});
+
+describe('classifyPartner', () => {
+  const base = {
+    activatedAt: daysAgo(400),
+    trackingStartedAt: daysAgo(100),
+    referralHighWater: 0,
+    lastReferralAt: null as Date | null,
+    lastEarningsIncreaseAt: null as Date | null,
+    inactiveTrackStartedAt: null as Date | null,
+    quietAt: null as Date | null,
+    unsubscribedAt: null as Date | null,
+  };
+  const group = (o: Partial<typeof base>) => classifyPartner({ ...base, ...o }, NOW);
+
+  it('puts partners in their first 21 days in "new"', () => {
+    expect(group({ activatedAt: daysAgo(5) })).toBe('new');
+    expect(group({ activatedAt: daysAgo(21) })).toBe('new');
+    expect(group({ activatedAt: daysAgo(22) })).toBe('not_referring');
+  });
+
+  it('puts partners whose commission grew in the last 30 days in "active"', () => {
+    expect(group({ referralHighWater: 3, lastEarningsIncreaseAt: daysAgo(10) })).toBe('active');
+  });
+
+  it('puts partners with a referral in the last 21 days in "referring"', () => {
+    expect(group({ referralHighWater: 2, lastReferralAt: daysAgo(7) })).toBe('referring');
+  });
+
+  it('puts partners whose last referral is 21+ days old in "previously_active"', () => {
+    expect(group({ referralHighWater: 2, lastReferralAt: daysAgo(30) })).toBe('previously_active');
+    // Referral date unknown (predates tracking): the clock starts at tracking start.
+    expect(group({ referralHighWater: 2, lastReferralAt: null, trackingStartedAt: daysAgo(40) })).toBe('previously_active');
+    expect(group({ referralHighWater: 2, lastReferralAt: null, trackingStartedAt: daysAgo(3) })).toBe('referring');
+  });
+
+  it('puts partners with no referrals after onboarding in "not_referring"', () => {
+    expect(group({})).toBe('not_referring');
+  });
+
+  it('lets the re-engagement tracks and opt-outs win over everything else', () => {
+    expect(group({ activatedAt: daysAgo(5), inactiveTrackStartedAt: daysAgo(1) })).toBe('inactive');
+    expect(group({ inactiveTrackStartedAt: daysAgo(40), quietAt: daysAgo(1) })).toBe('quiet');
+    expect(group({ quietAt: daysAgo(1), unsubscribedAt: daysAgo(2) })).toBe('unsubscribed');
   });
 });

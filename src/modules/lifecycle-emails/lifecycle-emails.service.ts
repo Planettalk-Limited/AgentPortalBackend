@@ -219,6 +219,22 @@ export class LifecycleEmailsService {
       state.inactiveTrackStartedAt = inactive30.at;
     }
 
+    // Dashboard: every referral milestone crossed since the last run, once each. Keyed off
+    // the high-water mark like the emails, so a bad upload and its correction count once.
+    if (!dryRun && !observed.bootstrapped && prev) {
+      for (const m of this.config.referralMilestones) {
+        if (m > prev.referralHighWater && m <= state.referralHighWater) {
+          await this.store.recordEvent({
+            agentId: agent.id,
+            type: 'referral_milestone',
+            dedupeKey: `referral_milestone:${m}`,
+            value: m,
+            occurredAt: now,
+          });
+        }
+      }
+    }
+
     if (observed.newReferral && !dryRun) {
       await this.store.markConversions(
         agent.id,
@@ -321,6 +337,21 @@ export class LifecycleEmailsService {
     // on today's cap; otherwise the transition would erase the reason to send it.
     if (decision.transitions.welcomeBack && !welcomeBackDeferred) {
       if (!dryRun) {
+        // Dashboard: the comeback, and the last re-engagement email that went out before it.
+        const lastEmail = rows
+          .filter((r) => r.status === 'sent' && /^inactive_\d+$/.test(r.templateKey) && r.sentAt && r.sentAt <= now)
+          .sort((a, b) => b.sentAt!.getTime() - a.sentAt!.getTime())[0];
+        await this.store.recordEvent({
+          agentId: agent.id,
+          type: 'comeback',
+          dedupeKey: `comeback:c${state.inactiveCycle}`,
+          occurredAt: now,
+          context: {
+            from: state.inactiveTrackStartedAt ? 'inactive_track' : 'quiet_list',
+            lastEmail: lastEmail?.templateKey ?? null,
+            lastEmailSentAt: lastEmail?.sentAt?.toISOString() ?? null,
+          },
+        });
         await this.store.markConversions(
           agent.id,
           ['inactive'],

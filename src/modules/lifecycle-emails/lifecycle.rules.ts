@@ -553,3 +553,58 @@ export function decide(
     return { candidates: out, suppressions, transitions };
   }
 }
+
+// ─── classifyPartner(): which group a partner is in today (dashboard only) ───
+
+export const PARTNER_GROUPS = [
+  'new',
+  'active',
+  'referring',
+  'previously_active',
+  'not_referring',
+  'inactive',
+  'quiet',
+  'unsubscribed',
+] as const;
+export type PartnerGroup = (typeof PARTNER_GROUPS)[number];
+
+export const PARTNER_GROUP_DEFINITIONS: Record<PartnerGroup, string> = {
+  new: 'Joined in the last 21 days (onboarding emails).',
+  active: "Commission grew in the last 30 days: their referrals are topping up.",
+  referring: 'New referral in the last 21 days.',
+  previously_active: 'Has referred before, but nothing new for 21+ days.',
+  not_referring: 'Past onboarding with no referrals yet, but still logging in.',
+  inactive: 'No login and no referral for 30+ days (in the re-engagement emails).',
+  quiet: 'Finished the re-engagement emails without coming back; only the newsletter now.',
+  unsubscribed: 'Opted out of lifecycle emails.',
+};
+
+export interface GroupInput {
+  activatedAt: Date;
+  trackingStartedAt: Date;
+  referralHighWater: number;
+  lastReferralAt: Date | null;
+  lastEarningsIncreaseAt: Date | null;
+  inactiveTrackStartedAt: Date | null;
+  quietAt: Date | null;
+  unsubscribedAt: Date | null;
+}
+
+/**
+ * One group per partner, mirroring the email tracks so the dashboard shows who is in
+ * which. Opt-outs and the re-engagement tracks win, then onboarding, then activity.
+ */
+export function classifyPartner(p: GroupInput, now: Date): PartnerGroup {
+  const days = (d: Date) => (now.getTime() - d.getTime()) / DAY_MS;
+  if (p.unsubscribedAt) return 'unsubscribed';
+  if (p.quietAt) return 'quiet';
+  if (p.inactiveTrackStartedAt) return 'inactive';
+  if (days(p.activatedAt) <= 21) return 'new';
+  if (p.lastEarningsIncreaseAt && days(p.lastEarningsIncreaseAt) <= 30) return 'active';
+  if (p.referralHighWater >= 1) {
+    // Same anchor as the "previously active" emails: an unknown referral date counts from tracking start.
+    const anchor = latest(p.lastReferralAt, p.trackingStartedAt);
+    return days(anchor) < 21 ? 'referring' : 'previously_active';
+  }
+  return 'not_referring';
+}

@@ -1,5 +1,5 @@
 import { LifecycleEmailsService } from './lifecycle-emails.service';
-import { ClaimInput, HistoryRow, LifecycleStore, PartnerRecord, StoredState } from './lifecycle.store';
+import { ClaimInput, HistoryRow, LifecycleEventInput, LifecycleStore, PartnerRecord, StoredState } from './lifecycle.store';
 
 const DAY = 24 * 60 * 60 * 1000;
 const START = new Date('2026-11-10T09:00:00Z'); // Tuesday
@@ -22,6 +22,7 @@ class MemoryStore implements LifecycleStore {
   partners: PartnerRecord[] = [];
   states = new Map<string, StoredState>();
   rows: Row[] = [];
+  events: LifecycleEventInput[] = [];
   lastMonth = new Map<string, number>();
   historic = new Map<string, number>();
   private locked = false;
@@ -81,6 +82,10 @@ class MemoryStore implements LifecycleStore {
       }
     }
     return n;
+  }
+  async recordEvent(input: LifecycleEventInput) {
+    if (this.events.some((e) => e.agentId === input.agentId && e.dedupeKey === input.dedupeKey)) return;
+    this.events.push({ ...input });
   }
   async withRunLock<T>(fn: () => Promise<T>) {
     if (this.locked) return null;
@@ -412,5 +417,68 @@ describe('LifecycleEmailsService.run', () => {
     });
     expect(options.templateData.unsubscribeLink).toMatch(/\/lifecycle-emails\/unsubscribe\?agent=agent-1&token=[\w-]+&e=email-1$/);
     expect(options.mailgun.headers['List-Unsubscribe']).toBe(`<${options.templateData.unsubscribeLink}>`);
+  });
+});
+
+describe('LifecycleEmailsService.run: dashboard events', () => {
+  it('records each referral milestone a partner crosses, once, even when no email can go out', async () => {
+    // Draft copy blocked: the milestone emails cannot send, but the crossings must still count.
+    const { store, run } = setup({ LIFECYCLE_ALLOW_DRAFT_COPY: 'false' });
+    store.partners = [partner({ agent: { totalReferrals: 3 } })];
+    await run(START);
+    expect(store.events).toEqual([]); // the baseline is not a crossing
+
+    store.partners[0].agent.totalReferrals = 12;
+    await run(day(1));
+    store.partners[0].agent.totalReferrals = 0; // bad upload
+    await run(day(2));
+    store.partners[0].agent.totalReferrals = 12; // restored
+    await run(day(3));
+
+    expect(store.events.map((e) => [e.type, e.value, e.occurredAt])).toEqual([
+      ['referral_milestone', 5, day(1)],
+      ['referral_milestone', 10, day(1)],
+    ]);
+  });
+
+  it('records nothing on a dry run', async () => {
+    const { store, run } = setup();
+    store.partners = [partner()];
+    await run(START);
+    store.partners[0].agent.totalReferrals = 1;
+    await run(day(1), true);
+    expect(store.events).toEqual([]);
+  });
+
+  it('records a comeback with the last re-engagement email the partner got', async () => {
+    const { store, run } = setup();
+    store.partners = [partner({ user: { lastLoginAt: new Date('2025-02-01T00:00:00Z') } })];
+    await run(START);
+    await run(day(30)); // inactive_30
+    await run(day(60)); // inactive_60
+    store.partners[0].user.lastLoginAt = day(65);
+    await run(day(66));
+
+    expect(store.events).toEqual([
+      expect.objectContaining({
+        agentId: 'agent-1',
+        type: 'comeback',
+        dedupeKey: 'comeback:c0',
+        occurredAt: day(66),
+        context: { from: 'inactive_track', lastEmail: 'inactive_60', lastEmailSentAt: day(60).toISOString() },
+      }),
+    ]);
+  });
+
+  it('records a comeback with no email when the re-engagement copy was held back', async () => {
+    const { store, run } = setup();
+    store.partners = [partner({ user: { lastLoginAt: new Date('2025-02-01T00:00:00Z') } })];
+    await run(START);
+    await run(day(30));
+    store.rows = []; // as if inactive_30 had never gone out
+    store.partners[0].user.lastLoginAt = day(40);
+    await run(day(41));
+
+    expect(store.events[0]).toMatchObject({ type: 'comeback', context: { lastEmail: null } });
   });
 });

@@ -7,6 +7,7 @@ import { AgentEarnings } from '../agents/entities/agent-earnings.entity';
 import { PartnerLifecycleState } from './entities/partner-lifecycle-state.entity';
 import { LifecycleEmail } from './entities/lifecycle-email.entity';
 import { LifecycleEmailEvent } from './entities/lifecycle-email-event.entity';
+import { PartnerLifecycleEvent } from './entities/partner-lifecycle-event.entity';
 import { LifecycleEmailsService } from './lifecycle-emails.service';
 import { LifecycleTrackingService } from './lifecycle-tracking.service';
 import { LifecycleSchedulerService } from './lifecycle-scheduler.service';
@@ -18,7 +19,7 @@ import { AdminRoleGuard } from './admin-role.guard';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([Agent, AgentEarnings, PartnerLifecycleState, LifecycleEmail, LifecycleEmailEvent]),
+    TypeOrmModule.forFeature([Agent, AgentEarnings, PartnerLifecycleState, LifecycleEmail, LifecycleEmailEvent, PartnerLifecycleEvent]),
     EmailModule,
   ],
   controllers: [AdminLifecycleEmailsController, LifecycleEmailsPublicController],

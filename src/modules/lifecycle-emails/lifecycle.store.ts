@@ -6,6 +6,7 @@ import { AgentEarnings } from '../agents/entities/agent-earnings.entity';
 import { UserRole } from '../users/entities/user.entity';
 import { PartnerLifecycleState } from './entities/partner-lifecycle-state.entity';
 import { LifecycleEmail, LifecycleEmailStatus } from './entities/lifecycle-email.entity';
+import { PartnerLifecycleEvent } from './entities/partner-lifecycle-event.entity';
 import { LifecycleStateView } from './lifecycle.rules';
 
 export const LIFECYCLE_STORE = Symbol('LIFECYCLE_STORE');
@@ -63,6 +64,15 @@ export interface ClaimInput {
   context?: Record<string, any>;
 }
 
+export interface LifecycleEventInput {
+  agentId: string;
+  type: 'referral_milestone' | 'comeback';
+  dedupeKey: string;
+  value?: number | null;
+  occurredAt: Date;
+  context?: Record<string, any> | null;
+}
+
 /** Persistence used by a lifecycle run. Abstracted so the run logic can be tested in memory. */
 export interface LifecycleStore {
   loadPartners(): Promise<PartnerRecord[]>;
@@ -82,6 +92,8 @@ export interface LifecycleStore {
   markFailed(id: string, error: string): Promise<void>;
   recordSuppressed(input: Omit<ClaimInput, 'recipient' | 'subject'> & { reason: string }): Promise<void>;
   markConversions(agentId: string, segments: string[], type: string, since: Date, at: Date): Promise<number>;
+  /** Record a dashboard event once per (agentId, dedupeKey); a repeat is ignored. */
+  recordEvent(input: LifecycleEventInput): Promise<void>;
   /** Runs fn while holding a cluster-wide lock; resolves null if another run holds it. */
   withRunLock<T>(fn: () => Promise<T>): Promise<T | null>;
 }
@@ -119,6 +131,7 @@ export class TypeOrmLifecycleStore implements LifecycleStore {
     @InjectRepository(AgentEarnings) private readonly earnings: Repository<AgentEarnings>,
     @InjectRepository(PartnerLifecycleState) private readonly states: Repository<PartnerLifecycleState>,
     @InjectRepository(LifecycleEmail) private readonly emails: Repository<LifecycleEmail>,
+    @InjectRepository(PartnerLifecycleEvent) private readonly events: Repository<PartnerLifecycleEvent>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -250,6 +263,16 @@ export class TypeOrmLifecycleStore implements LifecycleStore {
       .andWhere('segment IN (:...segments)', { segments })
       .execute();
     return result.affected ?? 0;
+  }
+
+  async recordEvent(input: LifecycleEventInput): Promise<void> {
+    await this.events
+      .createQueryBuilder()
+      .insert()
+      .into(PartnerLifecycleEvent)
+      .values({ ...input, value: input.value ?? null, context: (input.context ?? null) as any })
+      .orIgnore()
+      .execute();
   }
 
   async withRunLock<T>(fn: () => Promise<T>): Promise<T | null> {

@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { Agent } from '../agents/entities/agent.entity';
 import { PartnerLifecycleState } from './entities/partner-lifecycle-state.entity';
@@ -7,6 +8,24 @@ import { LifecycleEmail } from './entities/lifecycle-email.entity';
 import { LifecycleEmailEvent } from './entities/lifecycle-email-event.entity';
 import { listLifecycleTemplates, getLifecycleTemplate } from './lifecycle-templates';
 import { toStateView } from './lifecycle.store';
+import { PartnerLifecycleEvent } from './entities/partner-lifecycle-event.entity';
+import { LifecycleConfig, loadLifecycleConfig } from './lifecycle.config';
+import { GroupInput, PARTNER_GROUPS, PartnerGroup, classifyPartner, localDateString } from './lifecycle.rules';
+import { lastMonths, shapeComebacks, summarizeGroups, summarizeMilestones } from './lifecycle-dashboard';
+
+/** Months of comebacks shown on the dashboard. */
+const COMEBACK_MONTHS = 6;
+/** Most partners listed for one group; the dashboard says when a list is cut short. */
+const GROUP_MEMBER_LIMIT = 500;
+
+interface PartnerRow extends GroupInput {
+  agentId: string;
+  agentCode: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  lastLoginAt: Date | null;
+}
 
 /** Mailgun event names we act on (new-style JSON webhooks). */
 const TRACKED_EVENTS = new Set(['delivered', 'opened', 'clicked', 'unsubscribed', 'complained', 'failed']);
@@ -29,13 +48,18 @@ export interface MailgunWebhookBody {
 @Injectable()
 export class LifecycleTrackingService {
   private readonly logger = new Logger(LifecycleTrackingService.name);
+  private readonly config: LifecycleConfig;
 
   constructor(
     @InjectRepository(LifecycleEmail) private readonly emails: Repository<LifecycleEmail>,
     @InjectRepository(LifecycleEmailEvent) private readonly events: Repository<LifecycleEmailEvent>,
     @InjectRepository(PartnerLifecycleState) private readonly states: Repository<PartnerLifecycleState>,
     @InjectRepository(Agent) private readonly agents: Repository<Agent>,
-  ) {}
+    @InjectRepository(PartnerLifecycleEvent) private readonly partnerEvents: Repository<PartnerLifecycleEvent>,
+    configService: ConfigService,
+  ) {
+    this.config = loadLifecycleConfig((key) => configService.get<string>(key));
+  }
 
   /** Records one (already signature-verified) Mailgun event. Safe to call repeatedly with the same event. */
   async recordMailgunEvent(body: MailgunWebhookBody): Promise<{ recorded: boolean; reason?: string }> {
@@ -237,6 +261,7 @@ export class LifecycleTrackingService {
       },
       segments,
       templates,
+      partners: await this.getPartnerMeasures(range),
       catalogue: listLifecycleTemplates().map((t) => ({
         key: t.key,
         segment: t.segment,
@@ -248,10 +273,129 @@ export class LifecycleTrackingService {
   }
 
   async getPartnerHistory(agentId: string) {
-    const [state, emails] = await Promise.all([
+    const [state, emails, rows] = await Promise.all([
       this.states.findOne({ where: { agentId } }),
       this.emails.find({ where: { agentId }, order: { createdAt: 'DESC' } }),
+      this.loadPartnerRows(agentId),
     ]);
-    return { state: state ? toStateView(state) : null, emails };
+    const group = rows[0] ? classifyPartner(rows[0], new Date()) : null;
+    return { state: state ? toStateView(state) : null, group, emails };
+  }
+
+  /** The partners currently in one group (dashboard drill-down), most referrals first. */
+  async getGroupMembers(group: PartnerGroup) {
+    const now = new Date();
+    const members = (await this.loadPartnerRows())
+      .filter((p) => classifyPartner(p, now) === group)
+      .sort((a, b) => b.referralHighWater - a.referralHighWater || a.agentCode.localeCompare(b.agentCode));
+    return {
+      group,
+      total: members.length,
+      limit: GROUP_MEMBER_LIMIT,
+      partners: members.slice(0, GROUP_MEMBER_LIMIT).map((p) => ({
+        agentId: p.agentId,
+        agentCode: p.agentCode,
+        name: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim(),
+        email: p.email,
+        referrals: p.referralHighWater,
+        lastReferralAt: p.lastReferralAt,
+        lastLoginAt: p.lastLoginAt,
+        joinedAt: p.activatedAt,
+      })),
+    };
+  }
+
+  /** Groups, referral milestones and monthly comebacks for the dashboard. */
+  private async getPartnerMeasures(range: { from?: Date; to?: Date }) {
+    const now = new Date();
+    const partners = await this.loadPartnerRows();
+
+    const crossingsQb = this.partnerEvents
+      .createQueryBuilder('ev')
+      .select('ev.value', 'value')
+      .addSelect('COUNT(*)', 'count')
+      .where(`ev.type = 'referral_milestone'`)
+      .groupBy('ev.value');
+    if (range.from) crossingsQb.andWhere('ev.occurredAt >= :from', { from: range.from });
+    if (range.to) crossingsQb.andWhere('ev.occurredAt < :to', { to: range.to });
+    const crossings = (await crossingsQb.getRawMany()).map((r) => ({ value: Number(r.value), count: Number(r.count) || 0 }));
+
+    const months = lastMonths(now, COMEBACK_MONTHS, this.config.timeZone);
+    // A little over the window; rows outside the listed months are dropped by shapeComebacks.
+    const since = new Date(now.getTime() - (COMEBACK_MONTHS * 31 + 1) * 24 * 60 * 60 * 1000);
+    const comebackEvents = await this.partnerEvents
+      .createQueryBuilder('ev')
+      .select(['ev.id', 'ev.occurredAt', 'ev.context'])
+      .where(`ev.type = 'comeback'`)
+      .andWhere('ev.occurredAt >= :since', { since })
+      .getMany();
+    const comebacks = shapeComebacks(
+      months,
+      comebackEvents.map((e) => ({
+        month: localDateString(e.occurredAt, this.config.timeZone).slice(0, 7),
+        lastEmail: (e.context?.lastEmail as string | null) ?? null,
+        count: 1,
+      })),
+    );
+
+    return {
+      groups: summarizeGroups(partners, now),
+      milestones: summarizeMilestones(
+        this.config.referralMilestones,
+        partners.map((p) => p.referralHighWater),
+        crossings,
+      ),
+      comebacks,
+      notes: [
+        'Groups are worked out from what the daily run last saw, so they are at most a day old.',
+        '"Reached" counts every partner whose referral total has ever hit the milestone, including before tracking began. "New" only counts crossings the daily run saw, within the selected dates.',
+        'A comeback is a partner who logged in or referred again after 30+ days with neither. "Last email" is the re-engagement email they got most recently before coming back; "none" means they came back without one.',
+      ],
+    };
+  }
+
+  /** Every tracked partner with what grouping needs, optionally just one. */
+  private async loadPartnerRows(agentId?: string): Promise<PartnerRow[]> {
+    const qb = this.states
+      .createQueryBuilder('s')
+      .innerJoin('s.agent', 'a')
+      .innerJoin('a.user', 'u')
+      .select('s.agentId', 'agentId')
+      .addSelect('a.agentCode', 'agentCode')
+      .addSelect('COALESCE(a.activatedAt, a.createdAt)', 'activatedAt')
+      .addSelect('u.firstName', 'firstName')
+      .addSelect('u.lastName', 'lastName')
+      .addSelect('u.email', 'email')
+      .addSelect('u.lastLoginAt', 'lastLoginAt')
+      .addSelect('s.trackingStartedAt', 'trackingStartedAt')
+      .addSelect('s.referralHighWater', 'referralHighWater')
+      .addSelect('s.lastReferralAt', 'lastReferralAt')
+      .addSelect('s.lastEarningsIncreaseAt', 'lastEarningsIncreaseAt')
+      .addSelect('s.inactiveTrackStartedAt', 'inactiveTrackStartedAt')
+      .addSelect('s.quietAt', 'quietAt')
+      .addSelect('s.unsubscribedAt', 'unsubscribedAt');
+    if (agentId) qb.where('s.agentId = :agentId', { agentId });
+    const rows = await qb.getRawMany();
+    const date = (v: unknown) => (v ? new Date(v as string) : null);
+    return rows.map((r) => ({
+      agentId: r.agentId,
+      agentCode: r.agentCode,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      email: r.email,
+      lastLoginAt: date(r.lastLoginAt),
+      activatedAt: date(r.activatedAt)!,
+      trackingStartedAt: date(r.trackingStartedAt)!,
+      referralHighWater: Number(r.referralHighWater) || 0,
+      lastReferralAt: date(r.lastReferralAt),
+      lastEarningsIncreaseAt: date(r.lastEarningsIncreaseAt),
+      inactiveTrackStartedAt: date(r.inactiveTrackStartedAt),
+      quietAt: date(r.quietAt),
+      unsubscribedAt: date(r.unsubscribedAt),
+    }));
+  }
+
+  static isPartnerGroup(value: string): value is PartnerGroup {
+    return (PARTNER_GROUPS as readonly string[]).includes(value);
   }
 }
