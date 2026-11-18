@@ -146,6 +146,15 @@ export class AuthService {
       role: user.role,
     };
 
+    // Password logins never recorded lastLoginAt (only the 2FA and OTP paths did),
+    // so "has this partner logged in?" read false for almost everyone. The partner
+    // lifecycle emails depend on it. A failure here must not block the login.
+    try {
+      await this.usersService.update(user.id, { lastLoginAt: new Date() });
+    } catch (error) {
+      console.error(`Failed to record lastLoginAt for user ${user.id}:`, error);
+    }
+
     const baseResponse = {
       success: true,
       emailVerified: true,

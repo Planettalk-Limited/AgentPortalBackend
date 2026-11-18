@@ -1,0 +1,24 @@
+{{!-- Generic partner lifecycle email. The copy is NOT here: edit
+      src/modules/lifecycle-emails/lifecycle-templates.ts --}}
+{{#if draft}}
+<div style="background-color: #fff3cd; color: #664d03; border: 1px solid #ffda6a; padding: 10px 14px; border-radius: 6px; margin-bottom: 20px; font-size: 13px;">
+  <strong>DRAFT COPY</strong> &middot; placeholder text awaiting final wording from PlanetTalk.
+</div>
+{{/if}}
+
+{{#each paragraphs}}
+<p>{{this}}</p>
+{{/each}}
+
+{{#if ctaUrl}}
+<p style="text-align:center; margin: 28px 0;"><a href="{{ctaUrl}}" class="button">{{ctaText}}</a></p>
+{{/if}}
+
+{{#if showReferralBox}}
+<div class="info-box success" style="margin: 25px 0;">
+  <p style="margin: 0;"><strong>Your partner code:</strong> {{agentCode}}</p>
+  <p style="margin: 8px 0 0;"><strong>Your referral link:</strong> <a href="{{referralLink}}" style="color: #24B6C3;">{{referralLink}}</a></p>
+</div>
+{{/if}}
+
+<p><strong>The PlanetTalk Partner Team</strong></p>
